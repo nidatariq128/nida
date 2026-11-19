@@ -22,5 +22,6 @@ ENV PORT=7860
 
 EXPOSE 7860
 
-# Start full-stack Express + production static server
-CMD ["npm", "start"]
+# Start full-stack Express + production static server directly
+CMD ["node", "server.ts"]
+

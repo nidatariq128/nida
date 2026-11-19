@@ -289,7 +289,7 @@ interface ServerLedger {
   alertConfig?: ServerAlertConfig;
 }
 
-const DATA_DIR = path.join(__dirname, '.data');
+const DATA_DIR = process.env.VERCEL ? path.join('/tmp', 'zn-data') : path.join(__dirname, '.data');
 const LEDGER_FILE = path.join(DATA_DIR, 'server-ledger.json');
 
 function loadLedger(): ServerLedger {
@@ -830,7 +830,7 @@ async function startDirectWhatsApp(isAutoResume = false): Promise<void> {
   }
 }
 
-if (fs.existsSync(path.join(WA_AUTH_DIR, 'creds.json'))) {
+if (!process.env.VERCEL && fs.existsSync(path.join(WA_AUTH_DIR, 'creds.json'))) {
   startDirectWhatsApp(true).catch((err) => {
     console.warn('[ZN DirectWA] Auto-resume warning:', err);
   });
@@ -2988,4 +2988,9 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
+
