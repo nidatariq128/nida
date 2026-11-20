@@ -175,8 +175,15 @@ function MainApp() {
   };
 
   // Instant Buy Now: adds to cart & opens checkout immediately
-  const handleInstantBuyNow = (product: Product, quantity: number, selectedSize?: string) => {
-    addToCart(product, quantity, selectedSize);
+  const handleInstantBuyNow = (
+    product: Product,
+    quantity: number,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => {
+    addToCart(product, quantity, selectedSize, selectedColor, selectedImage, customNote);
     setIsCheckoutOpen(true);
   };
 
@@ -215,6 +222,11 @@ function MainApp() {
               onQuickViewHeroProduct={() => setSelectedProductForModal(heroProduct)}
             />
 
+            <NewArrivals
+              onQuickView={(p) => setSelectedProductForModal(p)}
+              onNavigateShop={() => handleNavigateShop('new')}
+            />
+
             <CategoryShowcase
               onSelectCategory={(cat) => handleNavigateShop(cat)}
             />
@@ -227,11 +239,6 @@ function MainApp() {
             <div id="brand-story">
               <BrandStory />
             </div>
-
-            <NewArrivals
-              onQuickView={(p) => setSelectedProductForModal(p)}
-              onNavigateShop={() => handleNavigateShop('new')}
-            />
 
             <PromotionalBanner
               onNavigateShop={(cat) => handleNavigateShop(cat)}

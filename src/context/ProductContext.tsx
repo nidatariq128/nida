@@ -27,6 +27,7 @@ interface ProductContextType {
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addCollection: (col: Omit<CollectionItem, 'id' | 'isCustom' | 'createdAt'>) => Promise<string>;
+  updateCollection: (id: string, updates: Partial<CollectionItem>) => Promise<void>;
   deleteCollection: (id: string) => Promise<void>;
   seedInitialData: () => Promise<number>;
   getProductById: (id: string) => Product | undefined;
@@ -549,9 +550,77 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const getProductById = (id: string) => products.find((p) => p.id === id);
 
   const deletedCols = new Set([...Array.from(getDeletedCollectionIds()), ...serverDeletedCols]);
-  const allCategories: CollectionItem[] = [...DEFAULT_COLLECTIONS, ...customCollections].filter(
+
+  const overrideById = new Map<string, CollectionItem>();
+  const overrideByName = new Map<string, CollectionItem>();
+  for (const cc of customCollections) {
+    if (cc?.id) overrideById.set(cc.id, cc);
+    if (cc?.name) overrideByName.set(cc.name, cc);
+  }
+  const mergedDefaults = DEFAULT_COLLECTIONS.map((dc) => {
+    const ov = overrideById.get(dc.id) || overrideByName.get(dc.name);
+    if (!ov) return dc;
+    return {
+      ...dc,
+      ...ov,
+      id: dc.id,
+      name: dc.name,
+      isCustom: false,
+    };
+  });
+  const pureCustom = customCollections.filter(
+    (cc) => !DEFAULT_COLLECTIONS.some((dc) => dc.id === cc.id || dc.name === cc.name)
+  );
+  const allCategories: CollectionItem[] = [...mergedDefaults, ...pureCustom].filter(
     (c) => !deletedCols.has(c.id) && !deletedCols.has(c.name)
   );
+
+  const updateCollection = async (id: string, updates: Partial<CollectionItem>) => {
+    const existingCol =
+      allCategories.find((c) => c.id === id) ||
+      DEFAULT_COLLECTIONS.find((c) => c.id === id);
+    if (!existingCol) {
+      throw new Error('Collection not found.');
+    }
+
+    const updatedCol: CollectionItem = {
+      id: existingCol.id,
+      name: updates.name?.trim() || existingCol.name,
+      tagline: updates.tagline !== undefined ? updates.tagline : existingCol.tagline,
+      description: updates.description !== undefined ? updates.description : existingCol.description,
+      image: updates.image !== undefined ? updates.image : existingCol.image,
+      isCustom: existingCol.isCustom,
+      ...(existingCol.createdAt ? { createdAt: existingCol.createdAt } : {}),
+    };
+
+    const cleanDoc: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(updatedCol)) {
+      if (v !== undefined) cleanDoc[k] = v;
+    }
+
+    try {
+      await setDoc(doc(db, 'collections', updatedCol.id), cleanDoc, { merge: true });
+      if (auth.currentUser) {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          await fetch('/api/admin/collections', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ collection: updatedCol }),
+          });
+        } catch {}
+      }
+      setCustomCollections((prev) => [
+        ...prev.filter((c) => c.id !== updatedCol.id && c.name !== updatedCol.name),
+        updatedCol,
+      ]);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `collections/${updatedCol.id}`);
+    }
+  };
 
   return (
     <ProductContext.Provider
@@ -567,6 +636,7 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateProduct,
         deleteProduct,
         addCollection,
+        updateCollection,
         deleteCollection,
         seedInitialData,
         getProductById,

@@ -1,9 +1,9 @@
 import React from 'react';
-import { Award, ShieldCheck, HeartHandshake, Sparkles } from 'lucide-react';
+import { ShieldCheck, HeartHandshake, Sparkles, ShoppingBag, Gem, Award } from 'lucide-react';
 
 export const BrandStory: React.FC = () => {
   return (
-    <section className="py-24 px-6 lg:px-12 bg-[#0a0907] relative overflow-hidden border-t border-[#1c1811]">
+    <section className="hidden md:block py-24 px-6 lg:px-12 bg-[#0a0907] relative overflow-hidden border-t border-[#1c1811]">
       
       {/* Background Gold Ambient */}
       <div className="absolute top-1/2 right-10 -translate-y-1/2 w-80 h-80 bg-[#D6B16D]/5 rounded-full blur-[140px] pointer-events-none" />
@@ -62,7 +62,7 @@ export const BrandStory: React.FC = () => {
           </div>
 
           {/* Pillars */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-[#241e14]">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 sm:gap-6 pt-4 border-t border-[#241e14]">
             <div className="space-y-1.5">
               <Sparkles className="w-5 h-5 text-[#D6B16D]" />
               <h4 className="text-sm font-serif font-semibold text-white">Luxury Watches</h4>
@@ -77,6 +77,21 @@ export const BrandStory: React.FC = () => {
               <HeartHandshake className="w-5 h-5 text-[#D6B16D]" />
               <h4 className="text-sm font-serif font-semibold text-white">Waterproof Steel</h4>
               <p className="hidden md:block text-xs text-neutral-400">Anti-tarnish, non-fading 18K PVD coated pieces.</p>
+            </div>
+            <div className="space-y-1.5">
+              <ShoppingBag className="w-5 h-5 text-[#D6B16D]" />
+              <h4 className="text-sm font-serif font-semibold text-white">Handbags</h4>
+              <p className="hidden md:block text-xs text-neutral-400">Structured totes, quilted clutches & evening silhouettes.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Gem className="w-5 h-5 text-[#D6B16D]" />
+              <h4 className="text-sm font-serif font-semibold text-white">Jewellery</h4>
+              <p className="hidden md:block text-xs text-neutral-400">Heirloom bridal sets, rings, chokers & statement earrings.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Award className="w-5 h-5 text-[#D6B16D]" />
+              <h4 className="text-sm font-serif font-semibold text-white">Stainless Steel Jewellery</h4>
+              <p className="hidden md:block text-xs text-neutral-400">Hypoallergenic, waterproof & daily-wear 18K finishes.</p>
             </div>
           </div>
 

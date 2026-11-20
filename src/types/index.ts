@@ -21,6 +21,15 @@ export interface CollectionItem {
   createdAt?: string;
 }
 
+export interface GiftPackagingOption {
+  id: string;
+  name: string;
+  description?: string;
+  price: number; // in PKR (0 = Complimentary)
+  image?: string;
+  active: boolean;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -29,13 +38,19 @@ export interface Product {
   price: number; // in PKR
   salePrice?: number;
   images: string[];
+  imageColors?: string[];
   description: string;
   material?: string; // e.g. "316L Stainless Steel 18K PVD", "Velvet & Mirror Acrylic", "Premium Vegan Leather", "Kundan & Brass"
   goldPurity?: string; // kept optional for backwards compatibility
   waterproofGrade?: string; // e.g. "100% Waterproof & Anti-Tarnish"
   diamondDetails?: string; // kept optional for backwards compatibility
   customizationNotice?: string; // e.g. "Custom name printing available for bride & groom"
+  allowCustomization?: boolean;
+  customizationLabel?: string;
+  customizationPlaceholder?: string;
+  customizationFee?: number; // extra PKR per unit when customer adds custom note
   ringSizes?: string[];
+  sizeOptions?: string[];
   stock: number;
   isFeatured?: boolean;
   isNewArrival?: boolean;
@@ -48,6 +63,10 @@ export interface CartItem {
   product: Product;
   quantity: number;
   selectedSize?: string;
+  selectedColor?: string;
+  selectedImage?: string;
+  customNote?: string;
+  customizationFee?: number;
 }
 
 export type PaymentMethod = 'cod' | 'bank_transfer' | 'jazzcash' | 'easypaisa' | 'online_card';
@@ -68,7 +87,10 @@ export interface OrderItem {
   price: number;
   quantity: number;
   selectedSize?: string;
+  selectedColor?: string;
   image: string;
+  customNote?: string;
+  customizationFee?: number;
 }
 
 export interface PaymentVerificationEntry {
@@ -92,6 +114,11 @@ export interface Order {
   shippingCost: number;
   discount: number;
   appliedPromo?: string;
+  giftPackagingId?: string;
+  giftPackagingName?: string;
+  giftPackagingFee?: number;
+  giftMessage?: string;
+  hideGiftPrice?: boolean;
   total: number;
   paymentMethod: PaymentMethod;
   paymentStatus: 'pending' | 'paid' | 'failed';

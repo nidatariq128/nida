@@ -628,12 +628,16 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <img
-                        src={
-                          item.image ||
-                          'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80'
-                        }
+                        src={item.image || '/hero-steel.jpg'}
                         alt={item.name}
                         className="w-14 h-14 rounded-lg object-cover bg-[#1c160e] border border-[#302315] shrink-0"
+                        onError={(e) => {
+                          const el = e.currentTarget;
+                          if (!el.dataset.fallbackApplied) {
+                            el.dataset.fallbackApplied = '1';
+                            el.src = '/hero-steel.jpg';
+                          }
+                        }}
                       />
                       <div className="min-w-0">
                         <span className="text-white font-medium text-xs sm:text-sm block truncate">
@@ -643,11 +647,21 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                           <span className="bg-[#18130a] px-2 py-0.5 rounded text-neutral-300 border border-[#2d2215]">
                             Qty: <strong className="text-white">{item.quantity}</strong>
                           </span>
+                          {item.selectedColor && (
+                            <span className="text-[#D6B16D] font-medium">
+                              Color: {item.selectedColor}
+                            </span>
+                          )}
                           {item.selectedSize && <span>Size: {item.selectedSize}</span>}
                           {item.sku && (
                             <span className="font-mono text-[#D6B16D]">SKU: {item.sku}</span>
                           )}
                         </div>
+                        {item.customNote && (
+                          <p className="text-[11px] text-[#F4E0A5] mt-1 break-words">
+                            Custom: "{item.customNote}"
+                          </p>
+                        )}
                       </div>
                     </div>
                     <span className="font-mono text-sm text-[#D6B16D] font-bold shrink-0">
@@ -656,6 +670,20 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                   </div>
                 ))}
               </div>
+              {order.giftPackagingName && (
+                <div className="pt-2.5 border-t border-[#1f1910] flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="text-neutral-300">
+                    Gift Packaging: <strong className="text-white">{order.giftPackagingName}</strong>
+                    {order.giftMessage ? ` • Message: "${order.giftMessage}"` : ''}
+                    {order.hideGiftPrice ? ' • Hide price on slip' : ''}
+                  </span>
+                  <span className="font-mono text-[#D6B16D]">
+                    {(order.giftPackagingFee || 0) === 0
+                      ? 'Complimentary'
+                      : formatPKR(order.giftPackagingFee || 0)}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Support & Invoice Action Buttons */}
@@ -794,10 +822,7 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                     className="flex items-start gap-3 p-3 rounded-xl bg-neutral-50 border border-neutral-200"
                   >
                     <img
-                      src={
-                        item.image ||
-                        'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=200&q=80'
-                      }
+                      src={item.image || '/hero-steel.jpg'}
                       alt={item.name}
                       className="w-12 h-12 object-cover rounded border border-neutral-300 shrink-0"
                     />
@@ -807,8 +832,16 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                       </p>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-neutral-500">
                         {item.sku && <span className="font-mono">SKU: {item.sku}</span>}
+                        {item.selectedColor && (
+                          <span className="text-neutral-800 font-semibold">• Color: {item.selectedColor}</span>
+                        )}
                         {item.selectedSize && <span>• Size: {item.selectedSize}</span>}
                       </div>
+                      {item.customNote && (
+                        <p className="text-[10px] text-amber-800 font-medium break-words">
+                          Custom: "{item.customNote}"
+                        </p>
+                      )}
                       <div className="flex items-center justify-between pt-1 text-xs">
                         <span className="text-neutral-600 font-mono">
                           {item.quantity} × ₨ {item.price.toLocaleString()}
@@ -840,19 +873,26 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                       <tr key={idx} className="py-2">
                         <td className="py-2.5 pl-1 pr-2">
                           <img
-                            src={
-                              item.image ||
-                              'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=200&q=80'
-                            }
+                            src={item.image || '/hero-steel.jpg'}
                             alt={item.name}
                             className="w-11 h-11 object-cover rounded border border-neutral-300 shadow-sm"
                           />
                         </td>
                         <td className="py-2.5 pr-2 font-medium text-neutral-900">
                           {item.name}
+                          {item.selectedColor && (
+                            <span className="text-[10px] text-neutral-700 font-semibold block">
+                              Color / Design: {item.selectedColor}
+                            </span>
+                          )}
                           {item.selectedSize && (
                             <span className="text-[10px] text-neutral-500 block">
                               Size: {item.selectedSize}
+                            </span>
+                          )}
+                          {item.customNote && (
+                            <span className="text-[10px] text-amber-800 block">
+                              Custom: "{item.customNote}"
                             </span>
                           )}
                         </td>
@@ -874,6 +914,13 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                 </table>
               </div>
 
+              {order.giftMessage && (
+                <div className="mb-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-neutral-800">
+                  <strong className="text-amber-900">Gift Card Message:</strong> "{order.giftMessage}"
+                  {order.hideGiftPrice ? ' • (Hide price slip requested)' : ''}
+                </div>
+              )}
+
               <div className="pt-3 border-t-2 border-neutral-300 flex justify-end">
                 <div className="w-full sm:w-64 space-y-1.5 text-xs">
                   <div className="flex justify-between text-neutral-600">
@@ -884,6 +931,16 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                     <div className="flex justify-between text-emerald-700 font-medium">
                       <span>Discount</span>
                       <span className="font-mono">- ₨ {order.discount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {order.giftPackagingName && (
+                    <div className="flex justify-between text-neutral-600 gap-2">
+                      <span className="truncate">Gift Packaging ({order.giftPackagingName})</span>
+                      <span className="font-mono shrink-0">
+                        {(order.giftPackagingFee || 0) === 0
+                          ? 'Free'
+                          : `₨ ${(order.giftPackagingFee || 0).toLocaleString()}`}
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between text-neutral-600">

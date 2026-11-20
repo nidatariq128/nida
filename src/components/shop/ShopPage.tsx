@@ -28,14 +28,19 @@ export const ShopPage: React.FC<ShopPageProps> = ({
     initialCategory || (selectedCategory as any) || 'all'
   );
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'newest'>('price-asc');
+  const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'newest'>(
+    initialFilter === 'new' ? 'newest' : 'price-asc'
+  );
 
-  // Sync when initialCategory prop changes
+  // Sync when initialCategory or initialFilter prop changes
   React.useEffect(() => {
     if (initialCategory) {
       setActiveCategory(initialCategory);
+    } else if (initialFilter === 'new') {
+      setActiveCategory('all');
+      setSortBy('newest');
     }
-  }, [initialCategory]);
+  }, [initialCategory, initialFilter]);
 
   const customCategoryNames = allStoreCategories.filter(c => c.isCustom).map(c => c.name);
   const categories: (ProductCategory | 'all')[] = [
@@ -119,7 +124,9 @@ export const ShopPage: React.FC<ShopPageProps> = ({
         }
 
         // New in filter
-        if (initialFilter === 'new' && !p.isNewArrival) return false;
+        if (initialFilter === 'new' && !p.isNewArrival && !/^zn-prod-\d{10,}$/.test(p.id || '')) {
+          return false;
+        }
 
         return true;
       })
@@ -128,7 +135,11 @@ export const ShopPage: React.FC<ShopPageProps> = ({
         const priceB = b.salePrice ?? b.price;
         if (sortBy === 'price-asc') return priceA - priceB;
         if (sortBy === 'price-desc') return priceB - priceA;
-        if (sortBy === 'newest') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        if (sortBy === 'newest') {
+          const tsA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tsB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return (Number.isNaN(tsB) ? 0 : tsB) - (Number.isNaN(tsA) ? 0 : tsA);
+        }
         return priceA - priceB;
       });
   }, [products, activeCategory, searchQuery, sortBy, initialFilter]);
@@ -152,7 +163,11 @@ export const ShopPage: React.FC<ShopPageProps> = ({
           </div>
           <h1 className="text-3xl sm:text-5xl font-serif text-white tracking-wide">
             {activeCategory === 'all' ? (
-              <>Haute <span className="italic font-serif gold-gradient-text">Collections</span></>
+              initialFilter === 'new' ? (
+                <>New <span className="italic font-serif gold-gradient-text">Arrivals</span></>
+              ) : (
+                <>Haute <span className="italic font-serif gold-gradient-text">Collections</span></>
+              )
             ) : (
               <span className="gold-gradient-text">{activeCategory}</span>
             )}
@@ -284,7 +299,7 @@ export const ShopPage: React.FC<ShopPageProps> = ({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
             {filteredProducts.map((product) => (
               <ProductCard
                 key={product.id}

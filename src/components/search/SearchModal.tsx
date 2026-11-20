@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Search, X, ArrowRight, Sparkles } from 'lucide-react';
+import { Search, X, ArrowRight } from 'lucide-react';
 import { useProducts } from '../../context/ProductContext';
 import { Product } from '../../types';
 import { formatPKR } from '../../lib/formatters';
@@ -19,14 +19,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 }) => {
   const { products } = useProducts();
   const [queryText, setQueryText] = useState('');
-
-  const suggestions = [
-    'Bridal Bangles',
-    'Antique Gold Kada Pair',
-    'Men Chronograph Watch',
-    'Waterproof Anti-Tarnish Chain',
-    'Velvet Bridal Clutch'
-  ];
 
   const searchResults = useMemo(() => {
     const rawQ = queryText.trim().toLowerCase();
@@ -112,25 +104,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           </button>
         </div>
 
-        {/* Suggestion tags */}
+        {/* Browse By Category when search query is empty */}
         {!queryText && (
-          <div className="p-6 space-y-4">
-            <span className="text-[10px] uppercase tracking-[0.25em] text-[#D6B16D] font-bold block">
-              Popular Searches
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {suggestions.map((sug) => (
-                <button
-                  key={sug}
-                  onClick={() => setQueryText(sug)}
-                  className="px-3.5 py-1.5 rounded-full bg-[#15110a] border border-[#2b2214] text-xs text-neutral-300 hover:text-[#D6B16D] hover:border-[#D6B16D] transition-colors"
-                >
-                  {sug}
-                </button>
-              ))}
-            </div>
-
-            <div className="pt-4 border-t border-[#1e170e] space-y-2">
+          <div className="p-6">
+            <div className="space-y-2.5">
               <span className="text-[10px] uppercase tracking-[0.25em] text-[#D6B16D] font-bold block">
                 Browse By Category
               </span>

@@ -15,6 +15,12 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     description: 'Traditional Pakistani wedding bangles set. Includes 24 pieces combining deep ruby velvet micro-bangles, gold-polished filigree separators, and two heavy bridal Kundan centerpiece kadas.',
     material: 'Brass Gold-Plating, Kundan Glass Stones & Velvet',
+    sizeOptions: ['2.2', '2.4', '2.6', '2.8'],
+    allowCustomization: true,
+    customizationLabel: 'Bride & Groom Names / Custom Message (Optional)',
+    customizationPlaceholder: 'e.g. Ayesha & Hamza • Nikah Date or Wrist Size Note',
+    customizationFee: 300,
+    customizationNotice: 'Custom name printing & bangle sizing available on request.',
     stock: 15,
     isFeatured: true,
     isNewArrival: false,
@@ -175,6 +181,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     description: 'Prestigious men’s chronograph timepiece featuring a matte black sunray dial, functional sub-dials, tachymeter bezel, 3ATM water resistance, and an 18K gold-plated stainless steel oyster bracelet.',
     material: 'Stainless Steel Case with 18K Ion Gold Plating',
+    allowCustomization: true,
+    customizationLabel: 'Caseback Engraving / Initials (Optional)',
+    customizationPlaceholder: 'e.g. Engraved Initials "A.K" or Date 14-08-2026',
+    customizationFee: 250,
+    customizationNotice: 'Precision laser caseback engraving available.',
     stock: 12,
     isFeatured: true,
     isNewArrival: true,
@@ -511,7 +522,7 @@ export const CATEGORIES_LIST: CategoryMeta[] = [
   {
     name: 'Jewellery',
     description: 'Waterproof Herringbone Chains, Lucky Clover Pendants & Anti-Tarnish Pieces.',
-    image: '/hero-steel.jpg',
+    image: '/hero-collection-enhanced.jpg',
     tagline: 'Waterproof Everyday Luxury'
   },
   {

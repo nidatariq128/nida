@@ -349,22 +349,34 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                         {/* Items preview */}
                         <div className="space-y-2">
                           {ord.items.map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-2">
+                            <div key={idx} className="flex items-center justify-between gap-2 text-xs">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <img
                                   src={item.image}
                                   alt={item.name}
-                                  className="w-8 h-8 rounded object-cover"
+                                  className="w-8 h-8 rounded object-cover shrink-0"
                                 />
-                                <span className="text-white font-medium">
-                                  {item.name} (x{item.quantity})
-                                </span>
+                                <div className="min-w-0">
+                                  <span className="text-white font-medium block truncate">
+                                    {item.name} (x{item.quantity})
+                                  </span>
+                                  {item.customNote && (
+                                    <span className="text-[10px] text-[#F4E0A5] block truncate">
+                                      Custom: "{item.customNote}"
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <span className="font-mono text-neutral-300">
+                              <span className="font-mono text-neutral-300 shrink-0">
                                 {formatPKR(item.price * item.quantity)}
                               </span>
                             </div>
                           ))}
+                          {ord.giftPackagingName && (
+                            <p className="text-[11px] text-neutral-400 pt-1">
+                              Gift Packaging: <strong className="text-[#D6B16D]">{ord.giftPackagingName}</strong>
+                            </p>
+                          )}
                         </div>
 
                         <div className="pt-3 border-t border-[#1e170e] flex items-center justify-between">

@@ -3,7 +3,6 @@ import {
   MessageCircle,
   X,
   Send,
-  Sparkles,
   ExternalLink,
   Truck,
   MapPin,
@@ -141,23 +140,22 @@ export const ConciergeChatbot: React.FC<ConciergeChatbotProps> = ({
   ];
 
   return (
-    <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 print:hidden">
+    <div className="fixed bottom-3 right-3 sm:bottom-6 sm:right-6 z-40 print:hidden">
       {/* Chat Drawer Panel */}
       {isOpen && (
-        <div className="mb-3 w-[calc(100vw-2rem)] sm:w-[390px] h-[72vh] max-h-[550px] bg-[#0c0a07]/98 backdrop-blur-2xl border border-[#3b2e1b] rounded-2xl shadow-2xl shadow-black/90 flex flex-col overflow-hidden animate-fadeIn">
+        <div className="mb-2.5 w-[calc(100vw-1.5rem)] max-w-[330px] sm:max-w-none sm:w-[380px] h-[54vh] max-h-[410px] sm:h-[68vh] sm:max-h-[520px] bg-[#0c0a07]/98 backdrop-blur-2xl border border-[#3b2e1b] rounded-2xl shadow-2xl shadow-black/90 flex flex-col overflow-hidden animate-fadeIn">
           {/* Header */}
-          <div className="p-3.5 sm:p-4 bg-[#141009] border-b border-[#292014] flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#D6B16D] to-[#9E7426] text-black flex items-center justify-center shrink-0 shadow-md">
-                <Sparkles className="w-4 h-4" />
+          <div className="p-2.5 sm:p-4 bg-[#141009] border-b border-[#292014] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-[#D6B16D] to-[#9E7426] text-black flex items-center justify-center shrink-0 shadow-md">
+                <span className="font-serif font-bold text-[11px] sm:text-xs tracking-wider">ZN</span>
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-serif font-bold text-white truncate">
-                  ZN Jewelers Concierge
+                <h3 className="text-xs sm:text-sm font-serif font-bold text-white truncate">
+                  ZN Concierge
                 </h3>
-                <p className="text-[10px] text-emerald-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                  <span>Online • English & Roman Urdu</span>
+                <p className="text-[9px] sm:text-[10px] text-emerald-400 truncate">
+                  English &amp; Roman Urdu
                 </p>
               </div>
             </div>
@@ -187,7 +185,7 @@ export const ConciergeChatbot: React.FC<ConciergeChatbotProps> = ({
           </div>
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 text-xs">
+          <div className="flex-1 overflow-y-auto p-2.5 sm:p-4 space-y-2.5 sm:space-y-3 text-[11px] sm:text-xs">
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -291,27 +289,27 @@ export const ConciergeChatbot: React.FC<ConciergeChatbotProps> = ({
               e.preventDefault();
               void sendMessage(input);
             }}
-            className="p-3 bg-[#110e09] border-t border-[#241c11] flex items-center gap-2"
+            className="p-2 sm:p-3 bg-[#110e09] border-t border-[#241c11] flex items-center gap-2"
           >
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask in English or Roman Urdu..."
-              className="flex-1 bg-[#18130b] border border-[#2f2416] rounded-lg px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#D6B16D]"
+              className="flex-1 bg-[#18130b] border border-[#2f2416] rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-[#D6B16D]"
             />
             <button
               type="submit"
               disabled={!input.trim() || sending}
-              className="p-2 rounded-lg bg-[#D6B16D] text-black hover:bg-[#F4E0A5] disabled:opacity-40 transition-colors shrink-0 cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-lg bg-[#D6B16D] text-black hover:bg-[#F4E0A5] disabled:opacity-40 transition-colors shrink-0 cursor-pointer"
               aria-label="Send message"
             >
-              <Send className="w-4 h-4" />
+              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </form>
 
           {/* Subtle Store Footer Strip */}
-          <div className="px-3 py-1.5 bg-[#090705] border-t border-[#1b150d] flex items-center justify-between text-[10px] text-neutral-500">
+          <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-[#090705] border-t border-[#1b150d] flex items-center justify-between text-[9.5px] sm:text-[10px] text-neutral-500">
             <span className="flex items-center gap-1 truncate">
               <MapPin className="w-3 h-3 text-[#D6B16D] shrink-0" />
               <span className="truncate">Aman Tower, Korangi Crossing</span>
@@ -329,22 +327,24 @@ export const ConciergeChatbot: React.FC<ConciergeChatbotProps> = ({
         </div>
       )}
 
-      {/* Floating Toggle Button */}
+      {/* Floating Toggle Button (Compact ZN Badge on Mobile, ZN Concierge on Desktop) */}
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="ml-auto flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-[#D6B16D] via-[#F4E0A5] to-[#C29B53] text-black font-semibold text-xs uppercase tracking-wider shadow-[0_6px_28px_rgba(214,177,109,0.4)] hover:shadow-[0_8px_34px_rgba(214,177,109,0.55)] hover:scale-[1.03] transition-all cursor-pointer"
+        className="ml-auto flex items-center justify-center gap-1.5 sm:gap-2 h-10 px-3 sm:h-auto sm:px-4 sm:py-2.5 rounded-full bg-gradient-to-r from-[#D6B16D] via-[#F4E0A5] to-[#C29B53] text-black font-semibold text-xs uppercase tracking-wider shadow-[0_6px_24px_rgba(214,177,109,0.4)] hover:shadow-[0_8px_30px_rgba(214,177,109,0.55)] hover:scale-[1.03] transition-all cursor-pointer whitespace-nowrap"
         aria-label={isOpen ? 'Close ZN Concierge Chat' : 'Open ZN Concierge Chat'}
       >
         {isOpen ? (
           <>
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 shrink-0" />
+            <span className="sm:hidden font-serif font-bold tracking-wider">ZN</span>
             <span className="hidden sm:inline">Close</span>
           </>
         ) : (
           <>
-            <MessageCircle className="w-4 h-4" />
-            <span>ZN Concierge</span>
+            <MessageCircle className="w-4 h-4 shrink-0" />
+            <span className="sm:hidden font-serif font-bold tracking-wider">ZN</span>
+            <span className="hidden sm:inline">ZN Concierge</span>
           </>
         )}
       </button>

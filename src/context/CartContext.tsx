@@ -1,12 +1,32 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { CartItem, Product } from '../types';
-import { useStoreSettings } from './StoreSettingsContext';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { CartItem, GiftPackagingOption, Product } from '../types';
+import { DEFAULT_GIFT_PACKAGING_OPTIONS, useStoreSettings } from './StoreSettingsContext';
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, quantity?: number, selectedSize?: string) => void;
-  removeFromCart: (productId: string, selectedSize?: string) => void;
-  updateQuantity: (productId: string, quantity: number, selectedSize?: string) => void;
+  addToCart: (
+    product: Product,
+    quantity?: number,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => void;
+  removeFromCart: (
+    productId: string,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => void;
+  updateQuantity: (
+    productId: string,
+    quantity: number,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => void;
   clearCart: () => void;
   totalItems: number;
   subtotal: number;
@@ -17,6 +37,15 @@ interface CartContextType {
   appliedPromo: string | null;
   applyPromoCode: (code: string) => Promise<{ success: boolean; message: string }>;
   removePromoCode: () => void;
+  giftPackagingOptions: GiftPackagingOption[];
+  selectedGiftPackagingId: string;
+  setSelectedGiftPackagingId: (id: string) => void;
+  selectedGiftPackaging: GiftPackagingOption | null;
+  giftPackagingFee: number;
+  giftMessage: string;
+  setGiftMessage: (msg: string) => void;
+  hideGiftPrice: boolean;
+  setHideGiftPrice: (hide: boolean) => void;
   total: number;
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
@@ -40,6 +69,30 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
+  const [selectedGiftPackagingId, setSelectedGiftPackagingId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('zn_gift_packaging_id') || 'pkg-standard';
+    } catch {
+      return 'pkg-standard';
+    }
+  });
+
+  const [giftMessage, setGiftMessage] = useState<string>(() => {
+    try {
+      return localStorage.getItem('zn_gift_message') || '';
+    } catch {
+      return '';
+    }
+  });
+
+  const [hideGiftPrice, setHideGiftPrice] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('zn_hide_gift_price') === '1';
+    } catch {
+      return false;
+    }
+  });
+
   useEffect(() => {
     try {
       localStorage.setItem('zn_cart', JSON.stringify(items));
@@ -48,43 +101,143 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [items]);
 
-  const addToCart = (product: Product, quantity: number = 1, selectedSize?: string) => {
+  useEffect(() => {
+    try {
+      localStorage.setItem('zn_gift_packaging_id', selectedGiftPackagingId);
+      localStorage.setItem('zn_gift_message', giftMessage);
+      localStorage.setItem('zn_hide_gift_price', hideGiftPrice ? '1' : '0');
+    } catch {
+      // Ignore storage failures
+    }
+  }, [selectedGiftPackagingId, giftMessage, hideGiftPrice]);
+
+  const activeGiftPackagingOptions = useMemo(() => {
+    const raw = Array.isArray(settings.giftPackagingOptions)
+      ? settings.giftPackagingOptions
+      : DEFAULT_GIFT_PACKAGING_OPTIONS;
+    const active = raw.filter((o) => o && o.active !== false);
+    return active;
+  }, [settings.giftPackagingOptions]);
+
+  const selectedGiftPackaging = useMemo(() => {
+    if (activeGiftPackagingOptions.length === 0) return null;
+    return (
+      activeGiftPackagingOptions.find((o) => o.id === selectedGiftPackagingId) ||
+      activeGiftPackagingOptions[0]
+    );
+  }, [activeGiftPackagingOptions, selectedGiftPackagingId]);
+
+  const giftPackagingFee = useMemo(() => {
+    if (items.length === 0 || !selectedGiftPackaging) return 0;
+    return Math.max(0, Number(selectedGiftPackaging.price) || 0);
+  }, [items.length, selectedGiftPackaging]);
+
+  const isSameVariant = (
+    item: CartItem,
+    productId: string,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => {
+    const itemImg = item.selectedImage || item.product.images?.[0] || '';
+    const targetImg = selectedImage || item.product.images?.[0] || '';
+    return (
+      item.product.id === productId &&
+      (item.selectedSize || '') === (selectedSize || '') &&
+      (item.selectedColor || '') === (selectedColor || '') &&
+      itemImg === targetImg &&
+      (item.customNote || '').trim() === (customNote || '').trim()
+    );
+  };
+
+  const addToCart = (
+    product: Product,
+    quantity: number = 1,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => {
     if (product.stock <= 0) return;
+    const resolvedImage = selectedImage || product.images?.[0];
+    const resolvedColor = selectedColor?.trim() || undefined;
+    const resolvedCustomNote = customNote?.trim().slice(0, 160) || undefined;
+    const resolvedCustomFee =
+      resolvedCustomNote &&
+      product.allowCustomization &&
+      typeof product.customizationFee === 'number' &&
+      product.customizationFee > 0
+        ? product.customizationFee
+        : undefined;
+
     setItems((prevItems) => {
-      const existingIndex = prevItems.findIndex(
-        (item) => item.product.id === product.id && item.selectedSize === selectedSize
+      const existingIndex = prevItems.findIndex((item) =>
+        isSameVariant(item, product.id, selectedSize, resolvedColor, resolvedImage, resolvedCustomNote)
       );
 
       if (existingIndex > -1) {
         const existingItem = prevItems[existingIndex];
         const newQty = Math.min(existingItem.quantity + quantity, product.stock);
         const updated = [...prevItems];
-        updated[existingIndex] = { ...existingItem, product, quantity: newQty };
+        updated[existingIndex] = {
+          ...existingItem,
+          product,
+          quantity: newQty,
+          selectedColor: resolvedColor,
+          selectedImage: resolvedImage,
+          customNote: resolvedCustomNote,
+          customizationFee: resolvedCustomFee,
+        };
         return updated;
       } else {
         const initialQty = Math.min(quantity, Math.max(1, product.stock));
-        return [...prevItems, { product, quantity: initialQty, selectedSize }];
+        return [
+          ...prevItems,
+          {
+            product,
+            quantity: initialQty,
+            selectedSize,
+            selectedColor: resolvedColor,
+            selectedImage: resolvedImage,
+            customNote: resolvedCustomNote,
+            customizationFee: resolvedCustomFee,
+          },
+        ];
       }
     });
     setIsCartOpen(true);
   };
 
-  const removeFromCart = (productId: string, selectedSize?: string) => {
+  const removeFromCart = (
+    productId: string,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => {
     setItems((prevItems) =>
       prevItems.filter(
-        (item) => !(item.product.id === productId && item.selectedSize === selectedSize)
+        (item) => !isSameVariant(item, productId, selectedSize, selectedColor, selectedImage, customNote)
       )
     );
   };
 
-  const updateQuantity = (productId: string, quantity: number, selectedSize?: string) => {
+  const updateQuantity = (
+    productId: string,
+    quantity: number,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => {
     if (quantity <= 0) {
-      removeFromCart(productId, selectedSize);
+      removeFromCart(productId, selectedSize, selectedColor, selectedImage, customNote);
       return;
     }
     setItems((prevItems) =>
       prevItems.map((item) => {
-        if (item.product.id === productId && item.selectedSize === selectedSize) {
+        if (isSameVariant(item, productId, selectedSize, selectedColor, selectedImage, customNote)) {
           const clampedQty = Math.min(quantity, item.product.stock);
           return { ...item, quantity: clampedQty };
         }
@@ -97,13 +250,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setItems([]);
     setAppliedPromo(null);
     setDiscountAmount(0);
+    setGiftMessage('');
+    setHideGiftPrice(false);
+    setSelectedGiftPackagingId(activeGiftPackagingOptions[0]?.id || 'pkg-standard');
   };
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
   const subtotal = items.reduce((sum, item) => {
-    const itemPrice = item.product.salePrice ?? item.product.price;
-    return sum + itemPrice * item.quantity;
+    const basePrice = item.product.salePrice ?? item.product.price;
+    const customFee = item.customNote
+      ? Math.max(0, Number(item.customizationFee ?? item.product.customizationFee ?? 0) || 0)
+      : 0;
+    return sum + (basePrice + customFee) * item.quantity;
   }, 0);
 
   const freeShippingThreshold =
@@ -197,7 +356,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDiscountAmount(0);
   };
 
-  const total = Math.max(0, subtotal - discountAmount + shippingCost);
+  const total = Math.max(0, subtotal - discountAmount + shippingCost + giftPackagingFee);
 
   return (
     <CartContext.Provider
@@ -216,6 +375,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         appliedPromo,
         applyPromoCode,
         removePromoCode,
+        giftPackagingOptions: activeGiftPackagingOptions,
+        selectedGiftPackagingId: selectedGiftPackaging?.id || selectedGiftPackagingId,
+        setSelectedGiftPackagingId,
+        selectedGiftPackaging,
+        giftPackagingFee,
+        giftMessage,
+        setGiftMessage,
+        hideGiftPrice,
+        setHideGiftPrice,
         total,
         isCartOpen,
         setIsCartOpen,

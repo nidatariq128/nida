@@ -11,13 +11,15 @@ import {
   Check, 
   Sparkles,
   Send,
-  RotateCcw
+  RotateCcw,
+  MessageCircle
 } from 'lucide-react';
 import { Product, Review } from '../../types';
 import { formatPKR } from '../../lib/formatters';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../context/ProductContext';
+import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { handleFirestoreError, OperationType } from '../../lib/firestoreErrors';
@@ -25,7 +27,14 @@ import { handleFirestoreError, OperationType } from '../../lib/firestoreErrors';
 interface ProductDetailModalProps {
   product: Product | null;
   onClose: () => void;
-  onInstantBuyNow: (product: Product, quantity: number, selectedSize?: string) => void;
+  onInstantBuyNow: (
+    product: Product,
+    quantity: number,
+    selectedSize?: string,
+    selectedColor?: string,
+    selectedImage?: string,
+    customNote?: string
+  ) => void;
   onSelectRelatedProduct: (product: Product) => void;
 }
 
@@ -38,9 +47,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const { addToCart } = useCart();
   const { toggleWishlist, isInWishlist, user, profile, authError, clearAuthError, loginWithGoogle } = useAuth();
   const { products } = useProducts();
+  const { settings } = useStoreSettings();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string | undefined>(undefined);
+  const [customNote, setCustomNote] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'specs' | 'reviews' | 'delivery'>('specs');
   const [isZoomed, setIsZoomed] = useState(false);
@@ -61,7 +72,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     if (product) {
       setActiveImageIndex(0);
       setQuantity(1);
-      setSelectedSize(product.ringSizes && product.ringSizes.length > 0 ? product.ringSizes[0] : undefined);
+      const sizes =
+        product.sizeOptions && product.sizeOptions.length > 0
+          ? product.sizeOptions
+          : product.ringSizes || [];
+      setSelectedSize(sizes.length > 0 ? sizes[0] : undefined);
+      setCustomNote('');
       setShowSizingGuide(false);
       setReviewError(null);
       loadReviews(product.id);
@@ -123,8 +139,35 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   if (!product) return null;
 
+  const productImages =
+    product.images && product.images.length > 0 ? product.images : ['/hero-steel.jpg'];
+  const safeImageIndex = activeImageIndex < productImages.length ? activeImageIndex : 0;
+  const activeImageUrl = productImages[safeImageIndex] || productImages[0] || '/hero-steel.jpg';
+  const hasMultipleVariants =
+    productImages.length > 1 ||
+    (Array.isArray(product.imageColors) && product.imageColors.some((c) => Boolean(c?.trim())));
+
+  const getVariantLabel = (idx: number): string | undefined => {
+    const customLabel = product.imageColors?.[idx]?.trim();
+    if (customLabel) return customLabel;
+    if (productImages.length > 1) return `Color / Style ${idx + 1}`;
+    return undefined;
+  };
+  const selectedVariantLabel = getVariantLabel(safeImageIndex);
+
   const inWishlist = isInWishlist(product.id);
   const isSale = product.salePrice && product.salePrice < product.price;
+  const availableSizes =
+    product.sizeOptions && product.sizeOptions.length > 0
+      ? product.sizeOptions
+      : product.ringSizes || [];
+  const customExtraFee =
+    product.allowCustomization &&
+    customNote.trim().length > 0 &&
+    typeof product.customizationFee === 'number' &&
+    product.customizationFee > 0
+      ? product.customizationFee
+      : 0;
   const relatedProducts = products
     .filter((p) => p.category === product.category && p.id !== product.id)
     .slice(0, 3);
@@ -138,14 +181,28 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
   const handleAddToCart = () => {
     if (product.stock <= 0) return;
-    addToCart(product, quantity, selectedSize);
+    addToCart(
+      product,
+      quantity,
+      selectedSize,
+      selectedVariantLabel,
+      activeImageUrl,
+      customNote.trim() || undefined
+    );
     setAddedAnimation(true);
     setTimeout(() => setAddedAnimation(false), 1500);
   };
 
   const handleBuyNow = () => {
     if (product.stock <= 0) return;
-    onInstantBuyNow(product, quantity, selectedSize);
+    onInstantBuyNow(
+      product,
+      quantity,
+      selectedSize,
+      selectedVariantLabel,
+      activeImageUrl,
+      customNote.trim() || undefined
+    );
     onClose();
   };
 
@@ -183,8 +240,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               className="relative aspect-square w-full rounded-xl overflow-hidden bg-[#0c0a07] border border-[#382b19] ring-1 ring-inset ring-[#D6B16D]/20 shadow-2xl cursor-crosshair group select-none"
             >
               <img
-                src={product.images[activeImageIndex] || product.images[0] || '/hero-steel.jpg'}
-                alt={product.name}
+                src={activeImageUrl}
+                alt={selectedVariantLabel ? `${product.name} — ${selectedVariantLabel}` : product.name}
                 className={`w-full h-full object-cover transition-transform duration-200 ${
                   isZoomed ? 'scale-150' : 'scale-100'
                 }`}
@@ -204,28 +261,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 }}
               />
 
-              {/* Edge Vignette Scrim */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#090806]/60 via-transparent to-transparent pointer-events-none" />
+              {/* Subtle Bottom Edge Blending Scrim Only (No Overlaid Text/Badges on Photo) */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#090806]/35 via-transparent to-transparent pointer-events-none" />
 
               {/* Gold Corner Filigrees */}
               <div className="absolute top-2.5 left-2.5 w-3.5 h-3.5 border-t-2 border-l-2 border-[#D6B16D] opacity-70 pointer-events-none" />
               <div className="absolute top-2.5 right-2.5 w-3.5 h-3.5 border-t-2 border-r-2 border-[#D6B16D] opacity-70 pointer-events-none" />
               <div className="absolute bottom-2.5 left-2.5 w-3.5 h-3.5 border-b-2 border-l-2 border-[#D6B16D] opacity-70 pointer-events-none" />
               <div className="absolute bottom-2.5 right-2.5 w-3.5 h-3.5 border-b-2 border-r-2 border-[#D6B16D] opacity-70 pointer-events-none" />
-
-              {/* Badges */}
-              <div className="absolute top-3 left-3 flex flex-col gap-1.5 pointer-events-none pl-2 pt-1">
-                {product.material && (
-                  <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-black/85 backdrop-blur-md text-[#D6B16D] border border-[#3b311e]">
-                    {product.material}
-                  </span>
-                )}
-                {product.isNewArrival && (
-                  <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-[#D6B16D] text-black">
-                    New Arrival
-                  </span>
-                )}
-              </div>
 
               {/* Zoom hint (Desktop only) */}
               <div className="hidden lg:block absolute bottom-3 right-3 px-2 py-1 rounded bg-black/80 backdrop-blur-sm text-[10px] text-neutral-400 pointer-events-none uppercase tracking-wider border border-white/5">
@@ -234,32 +277,37 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             </div>
 
             {/* Thumbnails Row */}
-            {product.images.length > 1 && (
+            {productImages.length > 1 && (
               <div className="flex items-center gap-2.5 sm:gap-3 overflow-x-auto pb-1 scrollbar-none">
-                {product.images.map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveImageIndex(idx)}
-                    className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 shrink-0 transition-all ${
-                      activeImageIndex === idx
-                        ? 'border-[#D6B16D] shadow-md shadow-[#D6B16D]/20 scale-105'
-                        : 'border-[#292013] opacity-60 hover:opacity-100'
-                    }`}
-                  >
-                    <img
-                      src={img}
-                      alt={`Angle ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const el = e.currentTarget;
-                        if (!el.dataset.fallbackApplied) {
-                          el.dataset.fallbackApplied = '1';
-                          el.src = '/hero-steel.jpg';
-                        }
-                      }}
-                    />
-                  </button>
-                ))}
+                {productImages.map((img, idx) => {
+                  const thumbLabel = getVariantLabel(idx);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActiveImageIndex(idx)}
+                      title={thumbLabel || `Angle ${idx + 1}`}
+                      className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                        safeImageIndex === idx
+                          ? 'border-[#D6B16D] shadow-md shadow-[#D6B16D]/20 scale-105'
+                          : 'border-[#292013] opacity-65 hover:opacity-100'
+                      }`}
+                    >
+                      <img
+                        src={img}
+                        alt={thumbLabel || `Angle ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const el = e.currentTarget;
+                          if (!el.dataset.fallbackApplied) {
+                            el.dataset.fallbackApplied = '1';
+                            el.src = '/hero-steel.jpg';
+                          }
+                        }}
+                      />
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -326,14 +374,28 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             
             <div className="space-y-4">
               
-              {/* Category & SKU */}
-              <div className="flex items-center justify-between text-xs text-[#D6B16D] uppercase tracking-[0.2em]">
-                <span>{product.category}</span>
+              {/* Category, Clean Metadata & SKU */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-[0.18em] text-[#D6B16D]">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="font-semibold">{product.category}</span>
+                  {product.isNewArrival && (
+                    <>
+                      <span className="text-neutral-600" aria-hidden="true">·</span>
+                      <span className="text-[#F4E0A5] font-semibold">New Arrival</span>
+                    </>
+                  )}
+                  {product.material && (
+                    <>
+                      <span className="text-neutral-600" aria-hidden="true">·</span>
+                      <span className="text-neutral-300 font-normal tracking-wider">{product.material}</span>
+                    </>
+                  )}
+                </div>
                 <span className="font-mono text-neutral-400">{product.sku}</span>
               </div>
 
               {/* Title */}
-              <h2 className="text-2xl sm:text-3xl font-serif font-medium text-white leading-tight">
+              <h2 className="text-2xl sm:text-3xl font-serif font-medium text-white leading-tight text-balance">
                 {product.name}
               </h2>
 
@@ -350,21 +412,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </div>
 
               {/* Price in PKR */}
-              <div className="pt-2 border-y border-[#241d13] py-3.5 flex items-baseline gap-3">
+              <div className="pt-2 border-y border-[#241d13] py-3.5 flex flex-wrap items-baseline gap-3">
                 {isSale ? (
                   <>
-                    <span className="text-2xl sm:text-3xl font-mono font-semibold text-white">
+                    <span className="text-2xl sm:text-3xl font-mono tabular-nums font-semibold text-white">
                       {formatPKR(product.salePrice!)}
                     </span>
-                    <span className="text-sm font-mono text-neutral-400 line-through">
+                    <span className="text-sm font-mono tabular-nums text-neutral-400 line-through">
                       {formatPKR(product.price)}
                     </span>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    <span className="text-xs font-semibold text-emerald-400">
                       Privilege Savings
                     </span>
                   </>
                 ) : (
-                  <span className="text-2xl sm:text-3xl font-mono font-semibold text-white">
+                  <span className="text-2xl sm:text-3xl font-mono tabular-nums font-semibold text-white">
                     {formatPKR(product.price)}
                   </span>
                 )}
@@ -376,37 +438,103 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {product.description}
               </p>
 
-              {/* Size Selector if ring or variant */}
-              {product.ringSizes && product.ringSizes.length > 0 && (
+              {/* Color / Design Variant Selector (When multiple images or named colors exist) */}
+              {hasMultipleVariants && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-neutral-300 uppercase tracking-wider font-medium">
+                      Select Color / Design:
+                    </span>
+                    {selectedVariantLabel && (
+                      <span className="text-[#D6B16D] font-semibold">
+                        Selected: {selectedVariantLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {productImages.map((imgUrl, idx) => {
+                      const label = getVariantLabel(idx) || `Style ${idx + 1}`;
+                      const isSelected = safeImageIndex === idx;
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setActiveImageIndex(idx)}
+                          className={`flex items-center gap-2 pr-3 pl-1.5 py-1.5 min-h-[40px] rounded-lg text-xs border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#1a140a] text-[#F4E0A5] border-[#D6B16D] font-semibold ring-1 ring-[#D6B16D]/30'
+                              : 'bg-[#120e09] text-neutral-300 border-[#2f2416] hover:border-[#D6B16D]/70 hover:text-white'
+                          }`}
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={label}
+                            className="w-7 h-7 rounded object-cover border border-[#3b2e1b] shrink-0"
+                            onError={(e) => {
+                              const el = e.currentTarget;
+                              if (!el.dataset.fallbackApplied) {
+                                el.dataset.fallbackApplied = '1';
+                                el.src = '/hero-steel.jpg';
+                              }
+                            }}
+                          />
+                          <span className="whitespace-nowrap">{label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Size Selector (Bangles / Rings / Custom Sizes) */}
+              {availableSizes.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-300 uppercase tracking-wider font-medium">Select Ring Size:</span>
+                    <span className="text-neutral-300 uppercase tracking-wider font-medium">
+                      {product.category.toLowerCase().includes('bangle')
+                        ? 'Select Bangle Size:'
+                        : product.category.toLowerCase().includes('ring')
+                        ? 'Select Ring Size:'
+                        : 'Select Size:'}
+                    </span>
                     <button
                       type="button"
                       onClick={() => setShowSizingGuide((prev) => !prev)}
                       className="text-[#D6B16D] text-[11px] cursor-pointer hover:underline"
                     >
-                      {showSizingGuide ? 'Hide Sizing Guide' : 'Complimentary Sizing Guide'}
+                      {showSizingGuide ? 'Hide Sizing Guide' : 'Sizing Guide'}
                     </button>
                   </div>
                   {showSizingGuide && (
                     <div className="p-3 rounded-lg bg-[#141009] border border-[#2f2416] text-[11px] text-neutral-300 space-y-1.5">
                       <span className="text-[#D6B16D] font-semibold uppercase tracking-wider block text-[10px]">
-                        US / Pakistan Standard Ring Chart
+                        {product.category.toLowerCase().includes('bangle')
+                          ? 'Pakistan Standard Bangle Size Chart'
+                          : 'US / Pakistan Standard Ring Chart'}
                       </span>
-                      <div className="grid grid-cols-3 gap-2 font-mono text-[10px] text-neutral-300">
-                        <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 6 • 16.5 mm</div>
-                        <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 7 • 17.3 mm</div>
-                        <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 8 • 18.1 mm</div>
-                      </div>
+                      {product.category.toLowerCase().includes('bangle') ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[10px] text-neutral-300">
+                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.2 • Small</div>
+                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.4 • Medium</div>
+                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.6 • Large</div>
+                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.8 • XL</div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2 font-mono text-[10px] text-neutral-300">
+                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 6 • 16.5 mm</div>
+                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 7 • 17.3 mm</div>
+                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 8 • 18.1 mm</div>
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="flex items-center gap-2 flex-wrap">
-                    {product.ringSizes.map((size) => (
+                    {availableSizes.map((size) => (
                       <button
                         key={size}
+                        type="button"
                         onClick={() => setSelectedSize(size)}
-                        className={`w-10 h-10 rounded-lg text-xs font-medium border transition-all ${
+                        className={`min-w-[44px] h-10 px-3 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                           selectedSize === size
                             ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-bold shadow-md'
                             : 'bg-[#15110a] text-neutral-300 border-[#2f2416] hover:border-[#D6B16D]'
@@ -419,17 +547,66 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 </div>
               )}
 
+              {/* Customer Personalization / Custom Engraving Box */}
+              {product.allowCustomization && (
+                <div className="p-3.5 rounded-xl bg-[#120e08] border border-[#3a2d18] space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-[#F4E0A5] font-semibold flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#D6B16D] shrink-0" />
+                      <span>{product.customizationLabel || 'Custom Name / Engraving (Optional)'}</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-[#D6B16D]">
+                      {product.customizationFee && product.customizationFee > 0
+                        ? `+ ${formatPKR(product.customizationFee)} / pc`
+                        : 'Complimentary'}
+                    </span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    maxLength={160}
+                    value={customNote}
+                    onChange={(e) => setCustomNote(e.target.value)}
+                    placeholder={
+                      product.customizationPlaceholder ||
+                      'Enter custom name, initials, wrist size note, or special request...'
+                    }
+                    className="w-full bg-[#0a0805] border border-[#2f2416] rounded-lg px-3 py-2 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D6B16D] resize-none"
+                  />
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-neutral-400">
+                    <span className="truncate">
+                      {customExtraFee > 0
+                        ? `Personalization fee (${formatPKR(customExtraFee)} × ${quantity}) included in bag total.`
+                        : product.customizationNotice || 'Custom orders may take 1 extra day for hand-finishing.'}
+                    </span>
+                    <span className="font-mono shrink-0">{customNote.length}/160</span>
+                  </div>
+                  <div className="pt-1 border-t border-[#261d10] flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[10px] text-neutral-400">
+                      Design ya picture bhejni ho? Direct WhatsApp karein:
+                    </span>
+                    <a
+                      href={`${(settings.whatsappUrl || 'https://wa.me/923178113817').replace(/\?.*$/, '')}?text=${encodeURIComponent(
+                        `Assalam-o-Alaikum ZN Jewelers! Mujhe is item par custom work chahiye:\n• Product: ${product.name} (${product.sku})\n• Price: ${formatPKR((product.salePrice ?? product.price) + customExtraFee)}${selectedVariantLabel ? `\n• Color/Variant: ${selectedVariantLabel}` : ''}${selectedSize ? `\n• Size: ${selectedSize}` : ''}${customNote.trim() ? `\n• Custom Note: "${customNote.trim()}"` : ''}`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-emerald-950/70 border border-emerald-700/60 text-emerald-300 hover:bg-emerald-900 hover:text-white text-[11px] font-medium transition-colors"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Customize via WhatsApp</span>
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* Stock Indicator */}
               <div className="flex items-center gap-2 text-xs">
                 {product.stock <= 0 ? (
                   <span className="text-red-400 font-medium">Currently Sold Out — Enquire for Bespoke Casting</span>
                 ) : (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    <span className="text-emerald-400 font-medium">
-                      In Stock ({product.stock} Hand-Finished Units Available)
-                    </span>
-                  </>
+                  <span className="text-emerald-400 font-medium">
+                    In Stock ({product.stock} Hand-Finished Units Available)
+                  </span>
                 )}
               </div>
 

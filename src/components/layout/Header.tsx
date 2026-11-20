@@ -14,8 +14,7 @@ import {
   Gem,
   Package,
   Layers,
-  Clock,
-  Truck
+  Clock
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -180,15 +179,16 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-40 w-full transition-all duration-300">
-      {/* 1. Simple Clean Announcement Bar */}
-      <div className="bg-[#0a0805] border-b border-[#241c10] text-[#D6B16D] text-[11px] sm:text-xs uppercase tracking-[0.22em] py-2 px-4 text-center font-medium flex items-center justify-center gap-2 shadow-inner">
-        <Sparkles className="w-3.5 h-3.5 text-[#D6B16D] animate-pulse shrink-0" />
-        <span className="font-semibold text-white">
-          {settings.announcementText || `Complimentary Shipping on Orders Above ₨${settings.freeShippingThreshold.toLocaleString()}`}
-        </span>
-      </div>
+      {/* Editable Top Announcement Bar (Visible on Mobile & Laptop) */}
+      {settings.announcementText?.trim() && (
+        <div className="w-full bg-gradient-to-r from-[#130f08] via-[#211a0c] to-[#130f08] border-b border-[#332714] px-2 sm:px-6 py-1.5 text-center">
+          <p className="text-[9.5px] sm:text-[11px] uppercase tracking-[0.04em] sm:tracking-[0.18em] text-[#F4E0A5] font-medium leading-tight max-w-6xl mx-auto">
+            {settings.announcementText}
+          </p>
+        </div>
+      )}
 
-      {/* 2. Main Navigation Bar */}
+      {/* Main Navigation Bar */}
       <div 
         className={`w-full px-4 lg:px-8 py-3 transition-all duration-300 border-b ${
           isScrolled 
@@ -418,17 +418,10 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* 3. Mobile Navigation Drawer */}
+      {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 top-[104px] sm:top-[112px] z-50 bg-[#080808]/98 backdrop-blur-2xl border-t border-[#231e15] px-6 py-6 flex flex-col justify-between overflow-y-auto">
+        <div className="lg:hidden absolute left-0 right-0 top-full h-[calc(100dvh-100%)] z-50 bg-[#080808]/98 backdrop-blur-2xl border-t border-[#231e15] px-6 py-6 flex flex-col justify-between overflow-y-auto">
           <div className="space-y-6">
-            
-            {/* Free shipping banner */}
-            <div className="p-3 rounded-lg bg-[#141009] border border-[#332615] flex items-center gap-2 text-xs text-[#D6B16D]">
-              <Truck className="w-4 h-4 shrink-0" />
-              <span>{settings.announcementText || `Complimentary Shipping on Orders Above ₨${settings.freeShippingThreshold.toLocaleString()}`}</span>
-            </div>
-
             {/* Navigation Links */}
             <nav className="flex flex-col space-y-3 text-sm font-serif tracking-wider text-neutral-200">
               <button

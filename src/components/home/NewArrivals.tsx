@@ -9,13 +9,23 @@ interface NewArrivalsProps {
   onNavigateShop: (filter?: 'new') => void;
 }
 
+const getProductTimestamp = (p: Product): number => {
+  const parsed = p.createdAt ? new Date(p.createdAt).getTime() : 0;
+  if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+  const idMatch = /^zn-prod-(\d{10,})$/.exec(p.id || '');
+  return idMatch ? Number(idMatch[1]) : 0;
+};
+
 export const NewArrivals: React.FC<NewArrivalsProps> = ({ onQuickView, onNavigateShop }) => {
   const { products } = useProducts();
-  const newItems = products.filter((p) => p.isNewArrival).slice(0, 4);
+  const newItems = [...products]
+    .filter((p) => p.isNewArrival || /^zn-prod-\d{10,}$/.test(p.id || ''))
+    .sort((a, b) => getProductTimestamp(b) - getProductTimestamp(a))
+    .slice(0, 8);
 
   return (
-    <section className="py-20 px-6 lg:px-12 bg-[#080808] border-t border-[#1e1911]">
-      <div className="max-w-7xl mx-auto space-y-10">
+    <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-12 bg-[#080808] border-t border-[#1e1911]">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-10">
         
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="space-y-2">
@@ -40,7 +50,7 @@ export const NewArrivals: React.FC<NewArrivalsProps> = ({ onQuickView, onNavigat
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {newItems.map((product) => (
             <ProductCard
               key={product.id}

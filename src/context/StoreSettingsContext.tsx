@@ -3,6 +3,31 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
+import { GiftPackagingOption } from '../types';
+
+export const DEFAULT_GIFT_PACKAGING_OPTIONS: GiftPackagingOption[] = [
+  {
+    id: 'pkg-standard',
+    name: 'Standard Signature Pouch',
+    description: 'Protective ZN velvet pouch & tamper-evident parcel',
+    price: 0,
+    active: true,
+  },
+  {
+    id: 'pkg-velvet-box',
+    name: 'Royal Velvet Gift Box + Ribbon',
+    description: 'Cushioned presentation box with satin ribbon & tag',
+    price: 250,
+    active: true,
+  },
+  {
+    id: 'pkg-bridal-hamper',
+    name: 'Luxury Bridal Gift Hamper',
+    description: 'Keepsake box, silk tissue, gold ribbon & greeting card',
+    price: 500,
+    active: true,
+  },
+];
 
 export interface StoreSettings {
   businessName: string;
@@ -11,6 +36,7 @@ export interface StoreSettings {
   email: string;
   whatsappNumber: string;
   whatsappUrl: string;
+  whatsappCommunityUrl: string;
   instagramUrl: string;
   tiktokUrl: string;
   googleMapsQueryUrl: string;
@@ -25,6 +51,7 @@ export interface StoreSettings {
   deliveryTimeNationwide: string;
   warrantyPeriodSummary: string;
   announcementText: string;
+  giftPackagingOptions?: GiftPackagingOption[];
   // Pakistani Payment Accounts
   easypaisaTitle: string;
   easypaisaNumber: string;
@@ -48,6 +75,7 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   email: 'znjewelaers786@gmail.com',
   whatsappNumber: '+92 317 8113817',
   whatsappUrl: 'https://wa.me/923178113817',
+  whatsappCommunityUrl: 'https://wa.me/923178113817',
   instagramUrl: 'https://www.instagram.com/chipmunk.8083543?obrf=MWZkaml1aHVucWs3Yg==',
   tiktokUrl: 'https://www.tiktok.com/@zeeshan.king4803?_r=1&_t=ZS-9BJVXHbCTCf',
   googleMapsQueryUrl: 'https://www.google.com/maps/search/?api=1&query=ZN+Jewelers+Shop+47+Aman+Tower+Korangi+Crossing+Karachi+Pakistan',
@@ -61,7 +89,8 @@ export const DEFAULT_STORE_SETTINGS: StoreSettings = {
   deliveryTimeKarachi: '1 - 2 Business Days',
   deliveryTimeNationwide: '3 - 5 Business Days',
   warrantyPeriodSummary: '6 Months Repair & Plating Assistance on Timepieces & Waterproof Steel',
-  announcementText: 'Complimentary Nationwide Shipping On Orders Above ₨ 5,000',
+  announcementText: 'Free Delivery Above ₨ 5,000 Nationwide',
+  giftPackagingOptions: DEFAULT_GIFT_PACKAGING_OPTIONS,
   // Pakistani Payment Accounts Defaults
   easypaisaTitle: 'ZN Jewelers',
   easypaisaNumber: '0317 8113817',
@@ -110,6 +139,12 @@ export const StoreSettingsProvider: React.FC<{ children: React.ReactNode }> = ({
           merged.easypaisaNumber = DEFAULT_STORE_SETTINGS.easypaisaNumber;
           merged.jazzcashNumber = DEFAULT_STORE_SETTINGS.jazzcashNumber;
         }
+        if (
+          merged.announcementText === 'Complimentary Nationwide Shipping On Orders Above ₨ 5,000' ||
+          merged.announcementText === 'Cash on Delivery Nationwide • Authentic Waterproof 316L & Bridal Collections'
+        ) {
+          merged.announcementText = DEFAULT_STORE_SETTINGS.announcementText;
+        }
         return merged;
       }
     } catch (e) {
@@ -148,6 +183,15 @@ export const StoreSettingsProvider: React.FC<{ children: React.ReactNode }> = ({
         if (Object.keys(mergedRemote).length > 0) {
           setSettings((prev) => {
             const merged = { ...prev, ...mergedRemote };
+            if (
+              merged.announcementText === 'Complimentary Nationwide Shipping On Orders Above ₨ 5,000' ||
+              merged.announcementText === 'Cash on Delivery Nationwide • Authentic Waterproof 316L & Bridal Collections'
+            ) {
+              merged.announcementText = DEFAULT_STORE_SETTINGS.announcementText;
+            }
+            if (!Array.isArray(merged.giftPackagingOptions)) {
+              merged.giftPackagingOptions = DEFAULT_GIFT_PACKAGING_OPTIONS;
+            }
             localStorage.setItem('zn_store_settings', JSON.stringify(merged));
             return merged;
           });

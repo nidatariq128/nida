@@ -1,5 +1,5 @@
-import React from 'react';
-import { Star, Sparkles, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Star, Sparkles, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const CustomerTestimonials: React.FC = () => {
   const testimonials = [
@@ -35,9 +35,48 @@ export const CustomerTestimonials: React.FC = () => {
     }
   ];
 
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (isPaused) return;
+    const timer = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % testimonials.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [isPaused, testimonials.length]);
+
+  const prevReview = () => {
+    setActiveSlide((prev) => (prev - 1 + testimonials.length) % testimonials.length);
+  };
+
+  const nextReview = () => {
+    setActiveSlide((prev) => (prev + 1) % testimonials.length);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsPaused(true);
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    setIsPaused(false);
+    if (!touchStartRef.current) return;
+    const dx = touchStartRef.current.x - e.changedTouches[0].clientX;
+    const dy = touchStartRef.current.y - e.changedTouches[0].clientY;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      if (dx > 0) nextReview();
+      else prevReview();
+    }
+    touchStartRef.current = null;
+  };
+
+  const currentReview = testimonials[activeSlide];
+
   return (
-    <section className="py-24 px-6 lg:px-12 bg-[#060606] border-t border-[#1a160e]">
-      <div className="max-w-7xl mx-auto space-y-12">
+    <section className="py-14 sm:py-24 px-4 sm:px-6 lg:px-12 bg-[#060606] border-t border-[#1a160e]">
+      <div className="max-w-7xl mx-auto space-y-8 sm:space-y-12">
         
         {/* Header */}
         <div className="text-center space-y-3 max-w-xl mx-auto">
@@ -45,7 +84,7 @@ export const CustomerTestimonials: React.FC = () => {
             <Sparkles className="w-3 h-3" />
             <span>Patron Testimonials</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-serif text-white tracking-wide">
+          <h2 className="text-2xl sm:text-4xl font-serif text-white tracking-wide">
             Words From Our <span className="italic font-serif gold-gradient-text">Patrons</span>
           </h2>
           <p className="hidden md:block text-xs sm:text-sm text-neutral-400 font-light">
@@ -53,8 +92,79 @@ export const CustomerTestimonials: React.FC = () => {
           </p>
         </div>
 
-        {/* 3 Testimonials Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Mobile Auto-Rotating Single Card Slider (Zero Right-Side Cut-off) */}
+        <div
+          className="md:hidden space-y-4"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          <div className="w-full p-5 rounded-xl bg-[#0d0c09] border border-[#2b2417] flex flex-col justify-between shadow-xl transition-all duration-300">
+            <div className="space-y-3">
+              <div className="flex items-center gap-1 text-[#D6B16D]">
+                {[...Array(currentReview.stars)].map((_, i) => (
+                  <Star key={i} className="w-3.5 h-3.5 fill-[#D6B16D]" />
+                ))}
+              </div>
+
+              <h4 className="text-sm font-serif font-medium text-white leading-snug">
+                &ldquo;{currentReview.title}&rdquo;
+              </h4>
+
+              <p className="text-xs text-neutral-300 font-light leading-relaxed">
+                {currentReview.comment}
+              </p>
+            </div>
+
+            <div className="pt-4 mt-4 border-t border-[#1f1911] flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h5 className="text-xs font-semibold text-white tracking-wide truncate">{currentReview.name}</h5>
+                <span className="text-[11px] text-neutral-400 block truncate">{currentReview.location}</span>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-emerald-400 shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Verified Patron</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Controls & Dots */}
+          <div className="flex items-center justify-between px-1">
+            <button
+              type="button"
+              onClick={prevReview}
+              aria-label="Previous review"
+              className="p-2 rounded-lg bg-[#120f0a] border border-[#2d2417] text-neutral-300 hover:text-[#D6B16D]"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2">
+              {testimonials.map((_, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setActiveSlide(idx)}
+                  aria-label={`Review ${idx + 1}`}
+                  className={`h-2 rounded-full transition-all duration-300 ${
+                    idx === activeSlide ? 'w-6 bg-[#D6B16D]' : 'w-2 bg-[#2d2417]'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={nextReview}
+              aria-label="Next review"
+              className="p-2 rounded-lg bg-[#120f0a] border border-[#2d2417] text-neutral-300 hover:text-[#D6B16D]"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop 3-Column Grid */}
+        <div className="hidden md:grid md:grid-cols-3 gap-8">
           {testimonials.map((t, index) => (
             <div
               key={index}
@@ -69,7 +179,7 @@ export const CustomerTestimonials: React.FC = () => {
                 </div>
 
                 <h4 className="text-base font-serif font-medium text-white leading-snug">
-                  "{t.title}"
+                  &ldquo;{t.title}&rdquo;
                 </h4>
 
                 <p className="text-xs text-neutral-300 font-light leading-relaxed">
@@ -95,3 +205,4 @@ export const CustomerTestimonials: React.FC = () => {
     </section>
   );
 };
+

@@ -22,7 +22,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
 import pino from 'pino';
-import type { Order, Product, CollectionItem, InventoryLog, OrderStatus } from './src/types/index.ts';
+import type { Order, Product, CollectionItem, InventoryLog, OrderStatus, GiftPackagingOption } from './src/types/index.ts';
 import { INITIAL_PRODUCTS } from './src/data/sampleProducts.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -448,12 +448,127 @@ function normalizePhoneDigits(phone: string): string {
   return digits;
 }
 
+const SERVER_FAKE_TEXT_TOKENS = new Set([
+  'test', 'testing', 'dummy', 'fake', 'asdf', 'asdfg', 'qwer', 'qwerty', 'zxcv',
+  'hjkl', 'fghj', 'abcd', 'abc', 'xyz', 'none', 'nothing', 'anything', 'unknown',
+  'kuch', 'bhi', 'patani', 'pata', 'nahi', 'nhi', 'na', 'nil', 'n/a', 'address',
+  'street', 'city', 'pakistan', 'ghar', 'home', 'sample', 'demo', 'random',
+]);
+
+const SERVER_SHORT_VALID_TOKENS = new Set([
+  'dha', 'pechs', 'kda', 'fb', 'sec', 'ph', 'st', 'rd', 'blvd', 'blk', 'apt', 'flr',
+  'po', 'chs', 'askari', 'bahria', 'gulshan', 'clifton', 'johar', 'wapda', 'model',
+]);
+
 function isValidPakistanPhone(phone: string): boolean {
   const trimmed = phone.trim();
   const digits = trimmed.replace(/[^0-9]/g, '');
   if (digits.length < 10 || digits.length > 14) return false;
   const local = normalizePhoneDigits(trimmed);
-  return /^3[0-9]{9}$/.test(local) || digits.length >= 10;
+  return /^3[0-9]{9}$/.test(local) && !/^(\d)\1{9}$/.test(local);
+}
+
+function validateServerCity(city: string): { valid: boolean; clean?: string; error?: string } {
+  const clean = city.trim().replace(/\s+/g, ' ');
+  if (!clean || clean.toLowerCase() === 'other pakistan city') {
+    return { valid: false, error: 'Please select or enter a valid delivery city.' };
+  }
+  if (clean.length < 3 || clean.length > 64 || !/^[A-Za-z][A-Za-z\s.\-]{1,62}$/.test(clean)) {
+    return { valid: false, error: 'Please enter a valid Pakistani city name.' };
+  }
+  if (SERVER_FAKE_TEXT_TOKENS.has(clean.toLowerCase())) {
+    return { valid: false, error: 'Please provide a real delivery city name.' };
+  }
+  return { valid: true, clean };
+}
+
+function validateServerPostalCode(raw: string): { valid: boolean; clean?: string; error?: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: false, error: 'A valid 5-digit Pakistan postal code is required (e.g. 75190, 54000).' };
+  }
+  if (!/^[1-9][0-9]{4}$/.test(trimmed)) {
+    return { valid: false, error: 'Postal code must be exactly 5 digits and cannot start with 0.' };
+  }
+  if (
+    /^(\d)\1{4}$/.test(trimmed) ||
+    ['12345', '54321', '98765', '12312', '10000'].includes(trimmed)
+  ) {
+    return { valid: false, error: `"${trimmed}" is not a valid Pakistan Post postal code.` };
+  }
+  return { valid: true, clean: trimmed };
+}
+
+function validateServerShippingAddress(shippingAddress: string, cleanCity: string): { valid: boolean; error?: string } {
+  // Strip trailing ", City (12345), Pakistan" or ", City, Pakistan" when validating street line
+  let streetPart = shippingAddress.trim();
+  const suffixEscaped = cleanCity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  streetPart = streetPart
+    .replace(new RegExp(`,\\s*${suffixEscaped}(?:\\s*\\([0-9]{5}\\))?(?:,\\s*Pakistan)?$`, 'i'), '')
+    .trim();
+
+  const clean = streetPart.replace(/\s+/g, ' ');
+  if (clean.length < 12 || clean.length > 350) {
+    return {
+      valid: false,
+      error: 'Please enter a complete street & house address (minimum 12 characters).',
+    };
+  }
+  if (/(.)\1{4,}/i.test(clean)) {
+    return { valid: false, error: 'Delivery address contains invalid repeated characters.' };
+  }
+  const lower = clean.toLowerCase();
+  if (
+    lower.includes('kuch bhi') ||
+    lower.includes('kuch b ') ||
+    lower.includes('pta nhi') ||
+    lower.includes('pata nahi') ||
+    lower.includes('test address') ||
+    lower.includes('fake address')
+  ) {
+    return { valid: false, error: 'Please enter a real deliverable street & house address.' };
+  }
+  const tokens = clean.split(/[\s,;/]+/).filter(Boolean);
+  if (tokens.length < 3) {
+    return {
+      valid: false,
+      error: 'Please include House/Flat #, Street/Block, and Area/Sector in your delivery address.',
+    };
+  }
+  const alphaWords = tokens.map((t) => t.replace(/[^A-Za-z]/g, '')).filter((w) => w.length >= 2);
+  if (alphaWords.length === 0 || !alphaWords.some((w) => w.length >= 3)) {
+    return { valid: false, error: 'Please include valid area and street names in your delivery address.' };
+  }
+  const meaningfulWords = alphaWords.filter((w) => !SERVER_FAKE_TEXT_TOKENS.has(w.toLowerCase()));
+  if (meaningfulWords.length === 0) {
+    return { valid: false, error: 'Delivery address cannot be placeholder or test text.' };
+  }
+  const longGibberishWords = meaningfulWords.filter(
+    (w) => w.length >= 5 && !SERVER_SHORT_VALID_TOKENS.has(w.toLowerCase()) && !/[aeiouy]/i.test(w)
+  );
+  if (longGibberishWords.length >= meaningfulWords.length) {
+    return { valid: false, error: 'Please provide a valid, readable street and area name.' };
+  }
+  return { valid: true };
+}
+
+function validateServerPaymentReference(raw: string): { valid: boolean; clean?: string; error?: string } {
+  const clean = raw.trim().replace(/\s+/g, ' ');
+  if (clean.length < 5 || clean.length > 64) {
+    return {
+      valid: false,
+      error: 'Valid Transaction ID / TRX Reference (minimum 5 characters) is required for digital payments.',
+    };
+  }
+  const alnum = clean.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  if (
+    alnum.length < 5 ||
+    /^([a-z0-9])\1+$/.test(alnum) ||
+    ['12345', '123456', '1234567890', '54321', '00000', 'abcde', 'test1', 'asdfg', 'kuchbhi'].includes(alnum)
+  ) {
+    return { valid: false, error: 'Please enter a valid Easypaisa / JazzCash / Bank Transaction Reference ID.' };
+  }
+  return { valid: true, clean };
 }
 
 function loadMigratedBackupProducts(): Product[] {
@@ -537,15 +652,41 @@ async function fetchLiveCatalogMap(): Promise<Map<string, Product>> {
   return map;
 }
 
+const DEFAULT_SERVER_GIFT_PACKAGING: GiftPackagingOption[] = [
+  {
+    id: 'pkg-standard',
+    name: 'Standard Signature Pouch',
+    description: 'Protective ZN velvet pouch & tamper-evident parcel',
+    price: 0,
+    active: true,
+  },
+  {
+    id: 'pkg-velvet-box',
+    name: 'Royal Velvet Gift Box + Ribbon',
+    description: 'Cushioned presentation box with satin ribbon & tag',
+    price: 250,
+    active: true,
+  },
+  {
+    id: 'pkg-bridal-hamper',
+    name: 'Luxury Bridal Gift Hamper',
+    description: 'Keepsake box, silk tissue, gold ribbon & greeting card',
+    price: 500,
+    active: true,
+  },
+];
+
 async function fetchLiveShippingSettings(): Promise<{
   freeShippingThreshold: number;
   shippingRateKarachi: number;
   shippingRateNationwide: number;
+  giftPackagingOptions: GiftPackagingOption[];
 }> {
   const defaults = {
     freeShippingThreshold: 5000,
     shippingRateKarachi: 200,
     shippingRateNationwide: 250,
+    giftPackagingOptions: DEFAULT_SERVER_GIFT_PACKAGING,
   };
   const localSettings = ledger.storeSettings || {};
   try {
@@ -568,6 +709,9 @@ async function fetchLiveShippingSettings(): Promise<{
         typeof merged.shippingRateNationwide === 'number'
           ? merged.shippingRateNationwide
           : defaults.shippingRateNationwide,
+      giftPackagingOptions: Array.isArray(merged.giftPackagingOptions)
+        ? (merged.giftPackagingOptions as GiftPackagingOption[])
+        : defaults.giftPackagingOptions,
     };
   } catch {
     return {
@@ -583,6 +727,9 @@ async function fetchLiveShippingSettings(): Promise<{
         typeof localSettings.shippingRateNationwide === 'number'
           ? localSettings.shippingRateNationwide
           : defaults.shippingRateNationwide,
+      giftPackagingOptions: Array.isArray(localSettings.giftPackagingOptions)
+        ? (localSettings.giftPackagingOptions as GiftPackagingOption[])
+        : defaults.giftPackagingOptions,
     };
   }
 }
@@ -909,11 +1056,13 @@ function formatWhatsAppCommercialInvoice(order: Order, isTest = false): string {
 
   const itemsText = order.items
     .map((it, idx) => {
+      const colorPart = it.selectedColor ? ` | Color: ${it.selectedColor}` : '';
       const sizePart = it.selectedSize ? ` | Size: ${it.selectedSize}` : '';
+      const customPart = it.customNote ? `\n   ✨ Custom: "${it.customNote}"` : '';
       const lineTotal = (it.price || 0) * (it.quantity || 1);
       return (
         `${idx + 1}. *${it.name}*\n` +
-        `   SKU: ${it.sku || 'N/A'}${sizePart}\n` +
+        `   SKU: ${it.sku || 'N/A'}${colorPart}${sizePart}${customPart}\n` +
         `   Qty: ${it.quantity} × Rs. ${(it.price || 0).toLocaleString()} = *Rs. ${lineTotal.toLocaleString()}*`
       );
     })
@@ -950,6 +1099,17 @@ function formatWhatsAppCommercialInvoice(order: Order, isTest = false): string {
     msg += `🎟️ *Promo Discount${order.appliedPromo ? ` (${order.appliedPromo})` : ''}:* - Rs. ${order.discount.toLocaleString()}\n`;
   }
 
+  if (order.giftPackagingName) {
+    const pkgFee = Number(order.giftPackagingFee) || 0;
+    msg += `🎁 *Gift Packaging:* ${order.giftPackagingName} (${pkgFee === 0 ? 'Free' : `Rs. ${pkgFee.toLocaleString()}`})\n`;
+  }
+  if (order.giftMessage) {
+    msg += `💌 *Gift Card Message:* ${order.giftMessage}\n`;
+  }
+  if (order.hideGiftPrice) {
+    msg += `🙈 *Hide Price on Parcel Slip:* Yes\n`;
+  }
+
   msg +=
     `🚚 *Shipping:* ${order.shippingCost === 0 ? 'FREE' : `Rs. ${(order.shippingCost || 0).toLocaleString()}`}\n` +
     `💰 *TOTAL PAYABLE:* *Rs. ${order.total.toLocaleString()}*\n` +
@@ -977,9 +1137,13 @@ function formatCustomerOrderPlacedWhatsApp(order: Order): string {
   const itemsList = order.items
     .map(
       (it, idx) =>
-        `${idx + 1}. *${it.name}*${it.selectedSize ? ` (${it.selectedSize})` : ''} ×${it.quantity} — Rs. ${((it.price || 0) * (it.quantity || 1)).toLocaleString()}`
+        `${idx + 1}. *${it.name}*${it.selectedColor ? ` [${it.selectedColor}]` : ''}${it.selectedSize ? ` (${it.selectedSize})` : ''}${it.customNote ? ` — Custom: "${it.customNote}"` : ''} ×${it.quantity} — Rs. ${((it.price || 0) * (it.quantity || 1)).toLocaleString()}`
     )
     .join('\n');
+
+  const giftLine = order.giftPackagingName
+    ? `🎁 *Gift Packaging:* ${order.giftPackagingName} (${(order.giftPackagingFee || 0) === 0 ? 'Free' : `Rs. ${(order.giftPackagingFee || 0).toLocaleString()}`})\n`
+    : '';
 
   return (
     `✅ *ORDER RECEIVED — ZN JEWELLERS*\n\n` +
@@ -988,6 +1152,7 @@ function formatCustomerOrderPlacedWhatsApp(order: Order): string {
     `🧾 *Order ID:* ${order.orderNumber}\n` +
     `📌 *Current Status:* Order Placed (Verification Pending)\n` +
     `💳 *Payment Method:* ${formatPaymentMethodLabel(order.paymentMethod)}\n` +
+    giftLine +
     `💰 *Total Payable:* *Rs. ${order.total.toLocaleString()}*\n\n` +
     `🛍️ *Items:*\n${itemsList}\n\n` +
     `📍 *Delivery Address:* ${order.shippingAddress}\n\n` +
@@ -1167,11 +1332,12 @@ async function dispatchWhatsAppAlert(
           const item = items[idx];
           const itemBuf = await resolveAlertImageBuffer(item.image);
           if (itemBuf) {
+            const colorInfo = item.selectedColor ? ` | Color: ${item.selectedColor}` : '';
             const sizeInfo = item.selectedSize ? ` | Size: ${item.selectedSize}` : '';
             const extraCaption =
               `📸 *Item ${idx + 1} (${orderNumLabel})*\n` +
               `*${item.name}*\n` +
-              `SKU: ${item.sku || 'N/A'}${sizeInfo}\n` +
+              `SKU: ${item.sku || 'N/A'}${colorInfo}${sizeInfo}\n` +
               `Qty: ${item.quantity} × Rs. ${(item.price || 0).toLocaleString()} = *Rs. ${((item.price || 0) * (item.quantity || 1)).toLocaleString()}*`;
             await directWaSock.sendMessage(targetJid, {
               image: itemBuf,
@@ -1589,11 +1755,15 @@ app.post('/api/orders/create', async (req: Request, res: Response) => {
       customerPhone,
       shippingAddress,
       city,
+      postalCode,
       paymentMethod,
       paymentReference,
       paymentProofUrl,
       notes,
       promoCode,
+      giftPackagingId,
+      giftMessage,
+      hideGiftPrice,
       idempotencyKey,
       items: requestedItems,
     } = body;
@@ -1611,15 +1781,57 @@ app.post('/api/orders/create', async (req: Request, res: Response) => {
         payload: { error: 'Please enter a valid Pakistani mobile number (e.g. 0317 8113817).' },
       };
     }
-    if (typeof shippingAddress !== 'string' || shippingAddress.trim().length < 5 || shippingAddress.trim().length > 400) {
-      return { status: 400, payload: { error: 'Please enter a complete delivery address.' } };
-    }
-    if (typeof city !== 'string' || city.trim().length < 2 || city.trim().length > 64) {
+    if (typeof city !== 'string') {
       return { status: 400, payload: { error: 'Please select a valid delivery city.' } };
     }
+    const cityCheck = validateServerCity(city);
+    if (!cityCheck.valid || !cityCheck.clean) {
+      return { status: 400, payload: { error: cityCheck.error || 'Please select a valid delivery city.' } };
+    }
+    if (typeof shippingAddress !== 'string' || shippingAddress.trim().length < 12 || shippingAddress.trim().length > 400) {
+      return { status: 400, payload: { error: 'Please enter a complete delivery address.' } };
+    }
+    const extractedPostalMatch = shippingAddress.match(/\((\d{5})\)/);
+    const rawPostal = typeof postalCode === 'string' && postalCode.trim()
+      ? postalCode
+      : extractedPostalMatch?.[1] || '';
+    const postalCheck = validateServerPostalCode(rawPostal);
+    if (!postalCheck.valid) {
+      return { status: 400, payload: { error: postalCheck.error || 'Invalid 5-digit Pakistan postal code.' } };
+    }
+    const addrCheck = validateServerShippingAddress(shippingAddress, cityCheck.clean);
+    if (!addrCheck.valid) {
+      return { status: 400, payload: { error: addrCheck.error || 'Please enter a valid complete delivery address.' } };
+    }
+
     const validMethods = ['cod', 'bank_transfer', 'jazzcash', 'easypaisa', 'online_card'];
     if (!validMethods.includes(paymentMethod)) {
       return { status: 400, payload: { error: 'Invalid payment method.' } };
+    }
+    if (['easypaisa', 'jazzcash', 'bank_transfer'].includes(paymentMethod)) {
+      if (typeof paymentReference !== 'string') {
+        return {
+          status: 400,
+          payload: { error: 'Transaction Reference / TRX ID (min 5 characters) is required for digital payments.' },
+        };
+      }
+      const refCheck = validateServerPaymentReference(paymentReference);
+      if (!refCheck.valid) {
+        return { status: 400, payload: { error: refCheck.error } };
+      }
+      if (
+        typeof paymentProofUrl !== 'string' ||
+        !paymentProofUrl.startsWith('data:image/') ||
+        paymentProofUrl.length < 200 ||
+        paymentProofUrl.length > 350000
+      ) {
+        return {
+          status: 400,
+          payload: {
+            error: 'Payment receipt screenshot is required for Easypaisa, JazzCash, and Bank Transfer orders.',
+          },
+        };
+      }
     }
     if (paymentMethod === 'online_card') {
       const hasGateway = Boolean(
@@ -1703,27 +1915,76 @@ app.post('/api/orders/create', async (req: Request, res: Response) => {
           ? prod.salePrice
           : prod.price;
 
-      computedSubtotal += unitPrice * qty;
+      const customNote =
+        typeof rawItem.customNote === 'string' && rawItem.customNote.trim()
+          ? rawItem.customNote.trim().slice(0, 160)
+          : undefined;
+      const customizationFee =
+        customNote &&
+        prod.allowCustomization &&
+        typeof prod.customizationFee === 'number' &&
+        prod.customizationFee > 0
+          ? prod.customizationFee
+          : 0;
+      const effectiveUnitPrice = unitPrice + customizationFee;
+
+      const selectedColor =
+        typeof rawItem.selectedColor === 'string' && rawItem.selectedColor.trim()
+          ? rawItem.selectedColor.trim().slice(0, 64)
+          : undefined;
+
+      let chosenImage = prod.images?.[0] || '/hero-steel.jpg';
+      if (typeof rawItem.selectedImage === 'string' && Array.isArray(prod.images) && prod.images.includes(rawItem.selectedImage)) {
+        chosenImage = rawItem.selectedImage;
+      } else if (selectedColor && Array.isArray(prod.imageColors) && Array.isArray(prod.images)) {
+        const matchIdx = prod.imageColors.findIndex(
+          (c) => typeof c === 'string' && c.trim().toLowerCase() === selectedColor.toLowerCase()
+        );
+        if (matchIdx >= 0 && prod.images[matchIdx]) {
+          chosenImage = prod.images[matchIdx];
+        }
+      }
+
+      computedSubtotal += effectiveUnitPrice * qty;
       orderItems.push({
         productId: prod.id,
         name: prod.name,
         sku: prod.sku,
-        price: unitPrice,
+        price: effectiveUnitPrice,
         quantity: qty,
         selectedSize:
           typeof rawItem.selectedSize === 'string' && rawItem.selectedSize.trim()
             ? rawItem.selectedSize.trim().slice(0, 32)
             : undefined,
-        image: prod.images?.[0] || '/hero-steel.jpg',
+        selectedColor,
+        image: chosenImage,
+        ...(customNote ? { customNote } : {}),
+        ...(customizationFee > 0 ? { customizationFee } : {}),
       });
     }
 
-    // 4. Authoritative Coupon & Shipping Computation
+    // 4. Authoritative Coupon, Gift Packaging & Shipping Computation
     const couponEval = promoCode ? evaluateCoupon(promoCode, computedSubtotal) : null;
     if (promoCode && couponEval && !couponEval.valid) {
       return { status: 400, payload: { error: couponEval.message } };
     }
     const discountAmount = couponEval?.valid ? couponEval.discount : 0;
+
+    const activePkgOptions = (shippingCfg.giftPackagingOptions || []).filter(
+      (o) => o && o.active !== false
+    );
+    const cleanPkgId = typeof giftPackagingId === 'string' ? giftPackagingId.trim() : '';
+    const matchedPkg = cleanPkgId
+      ? activePkgOptions.find((o) => o.id === cleanPkgId)
+      : undefined;
+    const resolvedGiftPkgId = matchedPkg ? matchedPkg.id : undefined;
+    const resolvedGiftPkgName = matchedPkg ? matchedPkg.name : undefined;
+    const resolvedGiftPkgFee = matchedPkg ? Math.max(0, Number(matchedPkg.price) || 0) : 0;
+    const cleanGiftMessage =
+      typeof giftMessage === 'string' && giftMessage.trim()
+        ? giftMessage.trim().slice(0, 200)
+        : undefined;
+    const resolvedHideGiftPrice = Boolean(hideGiftPrice);
 
     const cleanCity = city.trim();
     const netAfterDiscount = Math.max(0, computedSubtotal - discountAmount);
@@ -1734,7 +1995,7 @@ app.post('/api/orders/create', async (req: Request, res: Response) => {
         ? shippingCfg.shippingRateKarachi
         : shippingCfg.shippingRateNationwide;
 
-    const totalPayable = Math.max(0, netAfterDiscount + shippingCost);
+    const totalPayable = Math.max(0, netAfterDiscount + shippingCost + resolvedGiftPkgFee);
 
     const randSuffix = Math.floor(10000 + Math.random() * 90000);
     const orderNumber = `ZN-${new Date().getFullYear()}-${randSuffix}`;
@@ -1763,6 +2024,11 @@ app.post('/api/orders/create', async (req: Request, res: Response) => {
       shippingCost,
       discount: discountAmount,
       ...(couponEval?.valid && couponEval.code ? { appliedPromo: couponEval.code } : {}),
+      ...(resolvedGiftPkgId ? { giftPackagingId: resolvedGiftPkgId } : {}),
+      ...(resolvedGiftPkgName ? { giftPackagingName: resolvedGiftPkgName } : {}),
+      ...(matchedPkg ? { giftPackagingFee: resolvedGiftPkgFee } : {}),
+      ...(cleanGiftMessage ? { giftMessage: cleanGiftMessage } : {}),
+      ...(resolvedHideGiftPrice ? { hideGiftPrice: true } : {}),
       total: totalPayable,
       paymentMethod,
       // Digital transfers & online payments remain pending until Admin/Webhook verifies!
@@ -2119,8 +2385,15 @@ app.post('/api/admin/orders/:orderId/update', async (req: Request, res: Response
   }
 
   const orderId = String(req.params.orderId || '').trim();
-  const { orderStatus, paymentStatus, trackingNumber, verificationNote, existingOrder } =
-    req.body || {};
+  const {
+    orderStatus,
+    paymentStatus,
+    trackingNumber,
+    verificationNote,
+    existingOrder,
+    itemCustomNotes,
+    orderNotes,
+  } = req.body || {};
 
   const validStatuses: OrderStatus[] = [
     'Order Placed',
@@ -2169,6 +2442,20 @@ app.post('/api/admin/orders/:orderId/update', async (req: Request, res: Response
       typeof trackingNumber === 'string' && trackingNumber.trim()
         ? trackingNumber.trim()
         : currentOrder.trackingNumber;
+
+    const nextItems = Array.isArray(itemCustomNotes)
+      ? currentOrder.items.map((it, idx) => {
+          const rawNote = itemCustomNotes[idx];
+          const cleaned = typeof rawNote === 'string' ? rawNote.trim().slice(0, 160) : '';
+          const { customNote: _oldNote, ...rest } = it;
+          return cleaned ? { ...rest, customNote: cleaned } : rest;
+        })
+      : currentOrder.items;
+
+    const nextNotes =
+      typeof orderNotes === 'string'
+        ? orderNotes.trim().slice(0, 500)
+        : currentOrder.notes;
 
     const history = Array.isArray(currentOrder.paymentVerificationHistory)
       ? [...currentOrder.paymentVerificationHistory]
@@ -2220,9 +2507,11 @@ app.post('/api/admin/orders/:orderId/update', async (req: Request, res: Response
           }
 
           tx.update(adminDb.collection('orders').doc(orderId), {
+            items: nextItems,
             orderStatus: nextOrderStatus,
             paymentStatus: nextPaymentStatus,
             ...(nextTracking ? { trackingNumber: nextTracking } : {}),
+            ...(typeof nextNotes === 'string' ? { notes: nextNotes } : {}),
             paymentVerificationHistory: history,
             stockRestored: true,
             updatedAt: nowIso,
@@ -2256,9 +2545,11 @@ app.post('/api/admin/orders/:orderId/update', async (req: Request, res: Response
       await adminDb.collection('orders').doc(orderId).set(
         {
           ...currentOrder,
+          items: nextItems,
           orderStatus: nextOrderStatus,
           paymentStatus: nextPaymentStatus,
           ...(nextTracking ? { trackingNumber: nextTracking } : {}),
+          ...(typeof nextNotes === 'string' ? { notes: nextNotes } : {}),
           paymentVerificationHistory: history,
           updatedAt: nowIso,
         },
@@ -2268,9 +2559,11 @@ app.post('/api/admin/orders/:orderId/update', async (req: Request, res: Response
 
     const updatedOrder: Order = {
       ...currentOrder,
+      items: nextItems,
       orderStatus: nextOrderStatus,
       paymentStatus: nextPaymentStatus,
       ...(nextTracking ? { trackingNumber: nextTracking } : {}),
+      ...(typeof nextNotes === 'string' ? { notes: nextNotes } : {}),
       paymentVerificationHistory: history,
       stockRestored,
       updatedAt: nowIso,

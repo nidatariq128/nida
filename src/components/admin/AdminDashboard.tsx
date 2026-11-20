@@ -32,15 +32,17 @@ import {
   RefreshCw,
   LayoutDashboard,
   Layers,
-  LogOut
+  LogOut,
+  Menu,
+  Gift
 } from 'lucide-react';
 import { useProducts } from '../../context/ProductContext';
 import { useAuth } from '../../context/AuthContext';
 import { collection, getDocs, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { Product, Order, OrderStatus, ProductCategory, InventoryLog } from '../../types';
+import { Product, Order, OrderStatus, ProductCategory, InventoryLog, CollectionItem, GiftPackagingOption } from '../../types';
 import { formatPKR, formatDate, generateSKU } from '../../lib/formatters';
-import { useStoreSettings } from '../../context/StoreSettingsContext';
+import { DEFAULT_GIFT_PACKAGING_OPTIONS, useStoreSettings } from '../../context/StoreSettingsContext';
 
 interface AdminDashboardProps {
   isOpen: boolean;
@@ -55,6 +57,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     updateProduct,
     deleteProduct,
     addCollection,
+    updateCollection,
     deleteCollection,
     seedInitialData,
     applyStockUpdates,
@@ -62,7 +65,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   } = useProducts();
   const { isAdmin, user, authError, clearAuthError, loginWithGoogle, logout, refreshSession } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'collections' | 'orders' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'collections' | 'packaging' | 'orders' | 'settings'>('overview');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [seedingLoading, setSeedingLoading] = useState(false);
@@ -73,7 +77,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsSavedSuccess, setSettingsSavedSuccess] = useState(false);
 
-  // Custom Collection Form State
+  // Gift Packaging Manager State
+  const [isCreatingGiftBox, setIsCreatingGiftBox] = useState(false);
+  const [newBoxName, setNewBoxName] = useState('');
+  const [newBoxDescription, setNewBoxDescription] = useState('');
+  const [newBoxPrice, setNewBoxPrice] = useState<number>(300);
+  const [newBoxImage, setNewBoxImage] = useState('');
+  const [pkgSaving, setPkgSaving] = useState(false);
+  const [pkgSuccessMessage, setPkgSuccessMessage] = useState<string | null>(null);
+
+  // Custom & Edit Collection Form State
   const [isCreatingCollection, setIsCreatingCollection] = useState(false);
   const [newColName, setNewColName] = useState('');
   const [newColTagline, setNewColTagline] = useState('');
@@ -81,6 +94,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [newColImage, setNewColImage] = useState('/hero-steel.jpg');
   const [colSaving, setColSaving] = useState(false);
   const [colSuccessMessage, setColSuccessMessage] = useState<string | null>(null);
+  const [editingCollection, setEditingCollection] = useState<CollectionItem | null>(null);
+  const [editColImage, setEditColImage] = useState('');
+  const [editColTagline, setEditColTagline] = useState('');
+  const [editColDescription, setEditColDescription] = useState('');
+  const [editColUploading, setEditColUploading] = useState(false);
+  const [editColSaving, setEditColSaving] = useState(false);
+  const [editColError, setEditColError] = useState<string | null>(null);
 
   // In-App Deletion Modal State (avoids blocked window.confirm in iframes)
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
@@ -91,7 +111,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
 
   useEffect(() => {
-    setSettingsForm(settings);
+    setSettingsForm({
+      ...settings,
+      giftPackagingOptions: Array.isArray(settings.giftPackagingOptions)
+        ? settings.giftPackagingOptions
+        : DEFAULT_GIFT_PACKAGING_OPTIONS,
+    });
   }, [settings]);
 
   // New / Edit Product Form State
@@ -105,11 +130,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [prodGoldPurity, setProdGoldPurity] = useState<string>('Stainless Steel & Mineral Glass');
   const [prodWeight, setProdWeight] = useState<number>(0);
   const [prodDiamondDetails, setProdDiamondDetails] = useState('');
+  const [prodAllowCustomization, setProdAllowCustomization] = useState<boolean>(false);
+  const [prodCustomizationFee, setProdCustomizationFee] = useState<number>(0);
+  const [prodCustomizationLabel, setProdCustomizationLabel] = useState<string>('');
+  const [prodCustomizationPlaceholder, setProdCustomizationPlaceholder] = useState<string>('');
+  const [prodSizeOptionsText, setProdSizeOptionsText] = useState<string>('');
   const [prodStock, setProdStock] = useState<number>(5);
   const [prodDescription, setProdDescription] = useState('');
   const [imageFiles, setImageFiles] = useState<string[]>([
     'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80'
   ]);
+  const [imageColors, setImageColors] = useState<string[]>(['']);
   const [isUploadingImages, setIsUploadingImages] = useState<boolean>(false);
   const [customUrlInput, setCustomUrlInput] = useState<string>('');
   const [prodIsFeatured, setProdIsFeatured] = useState<boolean>(true);
@@ -124,6 +155,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [newTrackingNumber, setNewTrackingNumber] = useState('');
   const [newPaymentStatus, setNewPaymentStatus] = useState<'pending' | 'paid' | 'failed'>('paid');
   const [verificationNote, setVerificationNote] = useState('');
+  const [editOrderNotes, setEditOrderNotes] = useState('');
+  const [editItemCustomNotes, setEditItemCustomNotes] = useState<string[]>([]);
   const [updatingOrder, setUpdatingOrder] = useState(false);
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<'ALL' | OrderStatus>('ALL');
@@ -321,27 +354,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   };
 
   // Device image file compressor
-  const compressImageFile = (file: File): Promise<string> => {
+  const compressImageFile = (file: File, maxDim = 800, quality = 0.75): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (readerEvent) => {
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800;
-          const MAX_HEIGHT = 800;
           let width = img.width;
           let height = img.height;
 
           if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
+            if (width > maxDim) {
+              height *= maxDim / width;
+              width = maxDim;
             }
           } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
+            if (height > maxDim) {
+              width *= maxDim / height;
+              height = maxDim;
             }
           }
 
@@ -353,7 +384,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
             return;
           }
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
           resolve(dataUrl);
         };
         img.onerror = (err) => reject(err);
@@ -373,6 +404,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
       const promises = Array.from(files).map((file) => compressImageFile(file));
       const compressedDataUrls = await Promise.all(promises);
       setImageFiles((prev) => [...prev, ...compressedDataUrls]);
+      setImageColors((prev) => [...prev, ...compressedDataUrls.map(() => '')]);
     } catch (err) {
       console.error('File compression error', err);
       setFormValidationError('Could not process some images from your device. Please try again.');
@@ -384,6 +416,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
 
   const handleRemoveImage = (indexToRemove: number) => {
     setImageFiles((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+    setImageColors((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleSetPrimaryImage = (index: number) => {
@@ -393,12 +426,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
       const rest = prev.filter((_, idx) => idx !== index);
       return [target, ...rest];
     });
+    setImageColors((prev) => {
+      const padded = imageFiles.map((_, idx) => prev[idx] || '');
+      const target = padded[index] || '';
+      const rest = padded.filter((_, idx) => idx !== index);
+      return [target, ...rest];
+    });
   };
 
   const handleAddUrlImage = () => {
     const trimmed = customUrlInput.trim();
     if (trimmed && !imageFiles.includes(trimmed)) {
       setImageFiles((prev) => [...prev, trimmed]);
+      setImageColors((prev) => [...prev, '']);
       setCustomUrlInput('');
     }
   };
@@ -431,6 +471,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     const nextPreset = presets.find((url) => !imageFiles.includes(url)) || presets[0];
     if (!imageFiles.includes(nextPreset)) {
       setImageFiles((prev) => [...prev, nextPreset]);
+      setImageColors((prev) => [...prev, '']);
     }
   };
 
@@ -446,9 +487,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     setProdGoldPurity('Stainless Steel & Mineral Glass');
     setProdWeight(0);
     setProdDiamondDetails('');
+    setProdAllowCustomization(false);
+    setProdCustomizationFee(0);
+    setProdCustomizationLabel('');
+    setProdCustomizationPlaceholder('');
+    setProdSizeOptionsText('');
     setProdStock(10);
     setProdDescription('Curated luxury timepiece by ZN JEWELLERS.');
     setImageFiles(['https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=1000&q=80']);
+    setImageColors(['']);
     setCustomUrlInput('');
     setProdIsFeatured(true);
     setProdIsNewArrival(true);
@@ -466,9 +513,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     setProdGoldPurity(p.material || p.goldPurity || 'Stainless Steel & Mineral Glass');
     setProdWeight(Number((p as any).weightGrams) || 0);
     setProdDiamondDetails(p.customizationNotice || p.diamondDetails || '');
+    setProdAllowCustomization(Boolean(p.allowCustomization));
+    setProdCustomizationFee(Number(p.customizationFee) || 0);
+    setProdCustomizationLabel(p.customizationLabel || '');
+    setProdCustomizationPlaceholder(p.customizationPlaceholder || '');
+    const existingSizes = p.sizeOptions?.length ? p.sizeOptions : p.ringSizes || [];
+    setProdSizeOptionsText(existingSizes.join(', '));
     setProdStock(p.stock);
     setProdDescription(p.description);
-    setImageFiles(p.images && p.images.length > 0 ? p.images : []);
+    const imgs = p.images && p.images.length > 0 ? p.images : [];
+    setImageFiles(imgs);
+    setImageColors(imgs.map((_, i) => p.imageColors?.[i] || ''));
     setCustomUrlInput('');
     setProdIsFeatured(!!p.isFeatured);
     setProdIsNewArrival(!!p.isNewArrival);
@@ -519,16 +574,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
       const existingProd = editingProductId ? products.find((p) => p.id === editingProductId) : undefined;
       const previousStock = existingProd ? existingProd.stock : 0;
 
+      const alignedColors = finalImages.map((_, i) => (imageColors[i] || '').trim());
+      const parsedSizes = prodSizeOptionsText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 20);
+
       const dataPayload: any = {
         name: trimmedName,
         sku: prodSku.trim() || generateSKU(prodCategory),
         category: prodCategory,
         price: numericPrice,
         images: finalImages,
+        imageColors: alignedColors.some(Boolean) ? alignedColors : [],
         description: prodDescription.trim() || `${trimmedName} - Premium creation by ZN JEWELLERS.`,
         material: prodGoldPurity,
         goldPurity: prodGoldPurity,
         weightGrams: Number(prodWeight) || 0,
+        allowCustomization: Boolean(prodAllowCustomization),
+        customizationFee: prodAllowCustomization ? Math.max(0, Number(prodCustomizationFee) || 0) : 0,
+        customizationLabel: prodCustomizationLabel.trim().slice(0, 128),
+        customizationPlaceholder: prodCustomizationPlaceholder.trim().slice(0, 200),
+        sizeOptions: parsedSizes,
         stock: numericStock,
         isFeatured: Boolean(prodIsFeatured),
         isNewArrival: Boolean(prodIsNewArrival),
@@ -635,6 +703,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
           paymentStatus: newPaymentStatus,
           trackingNumber: newTrackingNumber.trim(),
           verificationNote: verificationNote.trim() || undefined,
+          itemCustomNotes: editItemCustomNotes,
+          orderNotes: editOrderNotes,
           existingOrder: selectedOrderToEdit,
         }),
       });
@@ -654,8 +724,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
         }
       }
 
+      const fallbackItems = selectedOrderToEdit.items.map((it, idx) => {
+        const cleaned = (editItemCustomNotes[idx] || '').trim().slice(0, 160);
+        const { customNote: _old, ...rest } = it;
+        return cleaned ? { ...rest, customNote: cleaned } : rest;
+      });
+      const fallbackNotes = editOrderNotes.trim().slice(0, 500);
+
       const finalUpdatedOrder: Order = updatedOrderFromServer || {
         ...selectedOrderToEdit,
+        items: fallbackItems,
+        notes: fallbackNotes,
         orderStatus: newOrderStatus,
         trackingNumber: newTrackingNumber.trim() || selectedOrderToEdit.trackingNumber,
         paymentStatus: newPaymentStatus,
@@ -752,8 +831,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     );
   });
 
+  const persistGiftPackagingList = async (nextList: GiftPackagingOption[], successText: string) => {
+    const cleanList: GiftPackagingOption[] = nextList.map((opt, i) => ({
+      id: opt.id || `pkg-${Date.now()}-${i}`,
+      name: (opt.name || 'Gift Box').trim(),
+      description: (opt.description || '').trim(),
+      price: Math.max(0, Number(opt.price) || 0),
+      image: (opt.image || '').trim(),
+      active: opt.active !== false,
+    }));
+    setPkgSaving(true);
+    setAdminError(null);
+    try {
+      const nextForm = { ...settingsForm, giftPackagingOptions: cleanList };
+      setSettingsForm(nextForm);
+      await updateSettings({ giftPackagingOptions: cleanList });
+      setPkgSuccessMessage(successText);
+      setTimeout(() => setPkgSuccessMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to save gift packaging:', err);
+      setAdminError(err?.message || 'Gift packaging save karne mein error aya.');
+    } finally {
+      setPkgSaving(false);
+    }
+  };
+
   const navItems: {
-    id: 'overview' | 'products' | 'collections' | 'orders' | 'settings';
+    id: 'overview' | 'products' | 'collections' | 'packaging' | 'orders' | 'settings';
     label: string;
     subtitle: string;
     icon: React.ReactNode;
@@ -778,6 +882,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
       subtitle: 'Storefront Categories & Showcase',
       icon: <Layers className="w-4 h-4 shrink-0" />,
       count: categories.length,
+    },
+    {
+      id: 'packaging',
+      label: 'Gift Packaging',
+      subtitle: 'Gift Boxes, Photos & Tier Pricing',
+      icon: <Gift className="w-4 h-4 shrink-0" />,
+      count: (settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS).length,
     },
     {
       id: 'orders',
@@ -1011,46 +1122,206 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
               </div>
             </aside>
 
+            {/* MOBILE WORKSPACE SLIDE-OVER DRAWER (< lg) — Desktop Parity */}
+            {mobileNavOpen && (
+              <div
+                className="lg:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex"
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <aside
+                  className="w-72 max-w-[85vw] h-full bg-[#080705] border-r border-[#2c2315] flex flex-col shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-4 py-4 border-b border-[#1c160e] flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-lg bg-[#141009] border border-[#3b2e1b] text-[#D6B16D] flex items-center justify-center shrink-0">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase tracking-[0.22em] text-[#D6B16D] font-bold block leading-none">
+                          ZN JEWELLERS
+                        </span>
+                        <span className="text-xs font-serif text-white font-semibold block mt-1 truncate">
+                          Management Studio
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMobileNavOpen(false)}
+                      aria-label="Close navigation menu"
+                      className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-white/5"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+                    <span className="px-2.5 pb-1 block text-[10px] uppercase tracking-[0.18em] text-neutral-500 font-semibold">
+                      Workspace
+                    </span>
+                    {navItems.map((item) => {
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            if (item.id !== 'products') setIsEditingProduct(false);
+                            setMobileNavOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between gap-2.5 px-3 min-h-[44px] py-2.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                            isActive
+                              ? 'bg-[#15110a] text-[#F4E0A5] border border-[#322717] font-semibold'
+                              : 'text-neutral-300 hover:text-white hover:bg-[#100d08] border border-transparent'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2.5 min-w-0 text-left">
+                            <span className={isActive ? 'text-[#D6B16D]' : 'text-neutral-500'}>
+                              {item.icon}
+                            </span>
+                            <span className="truncate">{item.label}</span>
+                          </span>
+                          {typeof item.count === 'number' && (
+                            <span className="font-mono tabular-nums text-[11px] text-[#D6B16D]">
+                              {item.count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
+
+                  <div className="p-3.5 border-t border-[#1c160e] space-y-2.5 bg-[#090705]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('settings');
+                        setMobileNavOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-lg bg-[#0f0c08] border border-[#221a10] hover:border-[#3b2e1b] transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-neutral-400">
+                        <span>WhatsApp Link</span>
+                        <span
+                          className={
+                            alertStatus?.directWa?.status === 'connected' || alertStatus?.configured
+                              ? 'text-emerald-400 font-semibold'
+                              : 'text-amber-400 font-semibold'
+                          }
+                        >
+                          {alertStatus?.directWa?.status === 'connected'
+                            ? 'Live'
+                            : alertStatus?.configured
+                            ? 'Active'
+                            : 'Setup'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-neutral-300 font-mono truncate block mt-0.5">
+                        {alertStatus?.directWa?.connectedPhone || alertStatus?.ownerWhatsappPhone || 'Direct QR Ready'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleSeedDatabase();
+                        setMobileNavOpen(false);
+                      }}
+                      disabled={seedingLoading}
+                      className="w-full flex items-center justify-center gap-2 px-3 min-h-[42px] rounded-lg bg-[#141009] border border-[#2d2214] text-[#D6B16D] text-xs font-semibold cursor-pointer disabled:opacity-50"
+                    >
+                      <Database className="w-3.5 h-3.5 shrink-0" />
+                      <span>{seedingLoading ? 'Seeding Firestore...' : 'Seed Live Database'}</span>
+                    </button>
+
+                    <div className="pt-2 border-t border-[#1a140c] flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold block leading-none">
+                          Authorized Admin
+                        </span>
+                        <span className="text-[11px] text-neutral-400 font-mono truncate block mt-1">
+                          {user.email}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={logout}
+                        title="Sign Out"
+                        className="min-h-[40px] min-w-[40px] flex items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 cursor-pointer shrink-0"
+                      >
+                        <LogOut className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            )}
+
             {/* MAIN CONTENT COLUMN */}
             <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
               {/* Top Contextual Workspace Bar */}
-              <header className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[#211a10] bg-[#0e0b07] flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="lg:hidden w-8 h-8 rounded-lg bg-[#15110a] border border-[#3b2e1b] text-[#D6B16D] flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-neutral-400">
+              <header className="px-3.5 sm:px-6 py-3 sm:py-3.5 border-b border-[#211a10] bg-[#0e0b07] flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setMobileNavOpen(true)}
+                    aria-label="Open Workspace Menu"
+                    className="lg:hidden min-w-[42px] min-h-[42px] px-2.5 rounded-lg bg-[#15110a] border border-[#3b2e1b] text-[#D6B16D] flex items-center justify-center gap-1.5 shrink-0 hover:bg-[#1f190f] cursor-pointer"
+                  >
+                    <Menu className="w-4 h-4 shrink-0" />
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">Menu</span>
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="hidden sm:flex items-center gap-1.5 text-[10px] uppercase tracking-[0.16em] text-neutral-400">
                       <span className="text-[#D6B16D] font-semibold">ZN JEWELLERS</span>
                       <span className="text-neutral-600">/</span>
-                      <span className="text-neutral-200 font-semibold">{activeNavMeta.label}</span>
+                      <span className="text-neutral-200 font-semibold truncate">{activeNavMeta.label}</span>
                     </div>
                     <h2 className="text-sm sm:text-base font-serif font-semibold text-white truncate">
-                      {activeNavMeta.subtitle}
+                      <span className="sm:hidden">{activeNavMeta.label}</span>
+                      <span className="hidden sm:inline">{activeNavMeta.subtitle}</span>
                     </h2>
+                    <p className="sm:hidden text-[11px] text-neutral-400 truncate">
+                      {activeNavMeta.subtitle}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   {/* Contextual Quick Action (Desktop & Mobile) */}
                   {activeTab === 'products' && !isEditingProduct && (
                     <button
                       type="button"
                       onClick={handleOpenNewProduct}
-                      className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#D6B16D] hover:bg-[#F4E0A5] text-black text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                      className="flex items-center gap-1.5 px-3 sm:px-3.5 min-h-[38px] rounded-lg bg-[#D6B16D] hover:bg-[#F4E0A5] text-black text-[11px] sm:text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add Product</span>
+                      <span className="hidden sm:inline">Add Product</span>
+                      <span className="sm:hidden">Add</span>
                     </button>
                   )}
                   {activeTab === 'collections' && (
                     <button
                       type="button"
                       onClick={() => setIsCreatingCollection(!isCreatingCollection)}
-                      className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#D6B16D] hover:bg-[#F4E0A5] text-black text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                      className="flex items-center gap-1.5 px-3 sm:px-3.5 min-h-[38px] rounded-lg bg-[#D6B16D] hover:bg-[#F4E0A5] text-black text-[11px] sm:text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>{isCreatingCollection ? 'Close Form' : 'New Collection'}</span>
+                      <span className="hidden sm:inline">{isCreatingCollection ? 'Close Form' : 'New Collection'}</span>
+                      <span className="sm:hidden">{isCreatingCollection ? 'Close' : 'New'}</span>
+                    </button>
+                  )}
+                  {activeTab === 'packaging' && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingGiftBox(!isCreatingGiftBox)}
+                      className="flex items-center gap-1.5 px-3 sm:px-3.5 min-h-[38px] rounded-lg bg-[#D6B16D] hover:bg-[#F4E0A5] text-black text-[11px] sm:text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{isCreatingGiftBox ? 'Close Form' : 'New Gift Box'}</span>
+                      <span className="sm:hidden">{isCreatingGiftBox ? 'Close' : 'Add Box'}</span>
                     </button>
                   )}
                   {activeTab === 'orders' && (
@@ -1058,65 +1329,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                       type="button"
                       onClick={fetchOrders}
                       disabled={loadingOrders}
-                      className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#15110a] border border-[#2d2214] hover:border-[#D6B16D]/60 text-neutral-200 hover:text-[#D6B16D] text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 min-h-[38px] rounded-lg bg-[#15110a] border border-[#2d2214] hover:border-[#D6B16D]/60 text-neutral-200 hover:text-[#D6B16D] text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${loadingOrders ? 'animate-spin text-[#D6B16D]' : ''}`} />
-                      <span>Refresh</span>
+                      <span className="hidden sm:inline">Refresh</span>
                     </button>
                   )}
-
-                  {/* Mobile Seed Shortcut */}
-                  <button
-                    type="button"
-                    onClick={handleSeedDatabase}
-                    disabled={seedingLoading}
-                    title="Seed Live Database"
-                    className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#16120b] border border-[#2d2214] text-[#D6B16D] text-[10px] font-semibold cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
-                  >
-                    <Database className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">{seedingLoading ? 'Seeding...' : 'Seed'}</span>
-                  </button>
 
                   <button
                     type="button"
                     onClick={onClose}
                     aria-label="Close Admin Dashboard"
-                    className="p-2 text-neutral-400 hover:text-white rounded-lg hover:bg-white/5 border border-transparent hover:border-[#261f13] transition-colors cursor-pointer shrink-0"
+                    className="min-w-[40px] min-h-[40px] flex items-center justify-center text-neutral-400 hover:text-white rounded-lg hover:bg-white/5 border border-transparent hover:border-[#261f13] transition-colors cursor-pointer shrink-0"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </header>
-
-              {/* MOBILE NAVIGATION STRIP (< lg) */}
-              <div className="lg:hidden px-3 py-2 bg-[#080705] border-b border-[#1c160e] flex items-center gap-1.5 overflow-x-auto scrollbar-none shrink-0">
-                {navItems.map((item) => {
-                  const isActive = activeTab === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setActiveTab(item.id);
-                        if (item.id !== 'products') setIsEditingProduct(false);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                        isActive
-                          ? 'bg-[#16120b] text-[#F4E0A5] border border-[#3b2e1b] font-semibold'
-                          : 'text-neutral-400 hover:text-white border border-transparent'
-                      }`}
-                    >
-                      <span className={isActive ? 'text-[#D6B16D]' : 'text-neutral-500'}>{item.icon}</span>
-                      <span>{item.label}</span>
-                      {typeof item.count === 'number' && (
-                        <span className="font-mono tabular-nums text-[10px] text-[#D6B16D]/80">
-                          {item.count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
 
               {seedSuccessCount !== null && (
                 <div className="px-4 sm:px-6 py-2.5 bg-emerald-950/80 border-b border-emerald-700/70 text-xs text-emerald-200 flex items-center justify-center gap-2 shrink-0">
@@ -1140,17 +1369,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Unified 4-Column Executive KPI Strip (Single Elevation + Hairline Dividers) */}
-              <div className="rounded-xl bg-[#0f0c08] border border-[#261f13] grid grid-cols-2 lg:grid-cols-4 overflow-hidden">
-                <div className="p-4 sm:p-5 space-y-1.5 border-r border-b lg:border-b-0 border-[#211a10]">
+              {/* Unified 4-Column Executive KPI Strip (Readable full-width stack on mobile, 2x2 tablet, 4-col desktop) */}
+              <div className="rounded-xl bg-[#0f0c08] border border-[#261f13] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 overflow-hidden">
+                <div className="p-4 sm:p-5 space-y-1.5 border-b sm:border-r lg:border-b-0 border-[#211a10]">
                   <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-neutral-400 font-semibold">
                     <span>Total Revenue</span>
                     <DollarSign className="w-3.5 h-3.5 text-[#D6B16D] shrink-0" />
                   </div>
-                  <p className="text-lg sm:text-2xl font-mono tabular-nums font-bold text-white truncate">
+                  <p className="text-xl sm:text-2xl font-mono tabular-nums font-bold text-white">
                     {formatPKR(totalRevenue)}
                   </p>
-                  <p className="text-[11px] text-neutral-400 font-mono tabular-nums truncate">
+                  <p className="text-[11px] text-neutral-400 font-mono tabular-nums">
                     <span className="text-emerald-400">{paidOrdersCount} paid</span> · {pendingVerifyCount} awaiting
                   </p>
                 </div>
@@ -1160,23 +1389,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     <span>Total Orders</span>
                     <ShoppingBag className="w-3.5 h-3.5 text-[#D6B16D] shrink-0" />
                   </div>
-                  <p className="text-lg sm:text-2xl font-mono tabular-nums font-bold text-white">
+                  <p className="text-xl sm:text-2xl font-mono tabular-nums font-bold text-white">
                     {orders.length}
                   </p>
-                  <p className="text-[11px] text-neutral-400 truncate">
+                  <p className="text-[11px] text-neutral-400">
                     Across web & concierge channels
                   </p>
                 </div>
 
-                <div className="p-4 sm:p-5 space-y-1.5 border-r border-[#211a10]">
+                <div className="p-4 sm:p-5 space-y-1.5 border-b sm:border-b-0 sm:border-r border-[#211a10]">
                   <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-neutral-400 font-semibold">
                     <span>Pending Dispatch</span>
                     <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   </div>
-                  <p className="text-lg sm:text-2xl font-mono tabular-nums font-bold text-amber-300">
+                  <p className="text-xl sm:text-2xl font-mono tabular-nums font-bold text-amber-300">
                     {pendingOrders.length}
                   </p>
-                  <p className="text-[11px] text-amber-400/80 truncate">
+                  <p className="text-[11px] text-amber-400/80">
                     Requires courier confirmation
                   </p>
                 </div>
@@ -1186,10 +1415,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     <span>Inventory Valuation</span>
                     <Package className="w-3.5 h-3.5 text-[#D6B16D] shrink-0" />
                   </div>
-                  <p className="text-lg sm:text-2xl font-mono tabular-nums font-bold text-white truncate">
+                  <p className="text-xl sm:text-2xl font-mono tabular-nums font-bold text-white">
                     {formatPKR(inventoryValue)}
                   </p>
-                  <p className="text-[11px] text-neutral-400 font-mono tabular-nums truncate">
+                  <p className="text-[11px] text-neutral-400 font-mono tabular-nums">
                     {products.length} pieces · {categories.length} collections
                   </p>
                 </div>
@@ -1471,7 +1700,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                             <img
                               src={p.images[0] || '/hero-steel.jpg'}
                               alt={p.name}
-                              className="w-13 h-13 rounded-lg object-cover border border-[#322717] shrink-0"
+                              className="w-14 h-14 rounded-lg object-cover border border-[#322717] shrink-0"
                               onError={(e) => { (e.target as HTMLImageElement).src = '/hero-steel.jpg'; }}
                             />
                             <div className="flex-1 min-w-0 space-y-1">
@@ -1496,19 +1725,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   <button
+                                    type="button"
                                     onClick={() => handleOpenEditProduct(p)}
-                                    className="p-1.5 rounded bg-[#16120b] text-neutral-200 hover:text-[#D6B16D] border border-[#2d2214]"
+                                    className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg bg-[#16120b] text-neutral-200 hover:text-[#D6B16D] border border-[#2d2214]"
                                     title="Edit Product"
                                   >
-                                    <Edit3 className="w-3.5 h-3.5" />
+                                    <Edit3 className="w-4 h-4" />
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setDeleteConfirmTarget({ type: 'product', id: p.id, name: p.name })}
-                                    className="p-1.5 rounded bg-[#16120b] text-neutral-400 hover:text-red-400 border border-[#2d2214]"
+                                    className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-lg bg-[#16120b] text-neutral-400 hover:text-red-400 border border-[#2d2214]"
                                     title="Delete Product"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
@@ -1738,6 +1968,70 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                       />
                     </div>
 
+                    {/* Customer Customization & Sizes Card */}
+                    <div className="sm:col-span-2 p-4 rounded-xl bg-[#141009] border border-[#2d2215] space-y-3">
+                      <div>
+                        <label className="block text-[11px] uppercase tracking-wider text-neutral-300 mb-1">
+                          Available Sizes (Comma-Separated, Optional — e.g. 2.2, 2.4, 2.6, 2.8 for Bangles or 6, 7, 8 for Rings)
+                        </label>
+                        <input
+                          type="text"
+                          value={prodSizeOptionsText}
+                          onChange={(e) => setProdSizeOptionsText(e.target.value)}
+                          placeholder="Leave empty if one size fits all"
+                          className="w-full bg-[#0a0805] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                        />
+                      </div>
+
+                      <div className="pt-2 border-t border-[#241c11] space-y-3">
+                        <label className="flex items-center gap-2.5 cursor-pointer text-xs text-[#F4E0A5] font-medium">
+                          <input
+                            type="checkbox"
+                            checked={prodAllowCustomization}
+                            onChange={(e) => setProdAllowCustomization(e.target.checked)}
+                            className="accent-[#D6B16D]"
+                          />
+                          <span>Allow Customer Custom Text / Name Engraving Input on Product Page</span>
+                        </label>
+
+                        {prodAllowCustomization && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                            <div>
+                              <label className="block text-[11px] text-neutral-300 mb-1">Extra Fee per Piece (PKR)</label>
+                              <input
+                                type="number"
+                                min={0}
+                                value={prodCustomizationFee}
+                                onChange={(e) => setProdCustomizationFee(Math.max(0, Number(e.target.value) || 0))}
+                                placeholder="0 for Free"
+                                className="w-full bg-[#0a0805] border border-[#3b2e1b] rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-[#D6B16D]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-neutral-300 mb-1">Input Title / Label</label>
+                              <input
+                                type="text"
+                                value={prodCustomizationLabel}
+                                onChange={(e) => setProdCustomizationLabel(e.target.value)}
+                                placeholder="e.g. Bride & Groom Names"
+                                className="w-full bg-[#0a0805] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-neutral-300 mb-1">Placeholder Example</label>
+                              <input
+                                type="text"
+                                value={prodCustomizationPlaceholder}
+                                onChange={(e) => setProdCustomizationPlaceholder(e.target.value)}
+                                placeholder="e.g. Ayesha & Hamza"
+                                className="w-full bg-[#0a0805] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     {/* Direct Device File Upload (Mobile & Laptop) */}
                     <div className="sm:col-span-2 space-y-3 p-4 rounded-xl bg-[#141009] border border-[#2d2215]">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1802,54 +2096,74 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                       {/* Attached Thumbnails Grid */}
                       {imageFiles.length > 0 && (
                         <div className="space-y-2 pt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-medium">
-                              Attached Photos (First is Cover photo — click any to set as Cover):
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <label
-                                htmlFor="admin-device-file-input"
-                                className="text-[10px] text-[#D6B16D] hover:underline cursor-pointer flex items-center gap-1"
-                              >
-                                <Plus className="w-3 h-3" />
-                                <span>Add More</span>
-                              </label>
-                              <span className="text-[10px] text-neutral-500 font-mono">
-                                • {imageFiles.length} photo{imageFiles.length > 1 ? 's' : ''}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-medium">
+                                Attached Photos & Color Labels (Click photo to set as Cover):
                               </span>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <label
+                                  htmlFor="admin-device-file-input"
+                                  className="text-[10px] text-[#D6B16D] hover:underline cursor-pointer flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>Add More</span>
+                                </label>
+                                <span className="text-[10px] text-neutral-500 font-mono">
+                                  • {imageFiles.length} photo{imageFiles.length > 1 ? 's' : ''}
+                                </span>
+                              </div>
                             </div>
+                            <p className="text-[11px] text-neutral-400">
+                              Har image ke neechay optional Color / Design ka naam likhein (maslan Emerald Green, Classic Black) taake customer order mein sahi color choose kar sake.
+                            </p>
                           </div>
 
-                          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                             {imageFiles.map((imgUrl, idx) => (
-                              <div
-                                key={idx}
-                                onClick={() => handleSetPrimaryImage(idx)}
-                                className={`relative aspect-square rounded-lg overflow-hidden border-2 cursor-pointer group transition-all ${
-                                  idx === 0
-                                    ? 'border-[#D6B16D] shadow-md shadow-[#D6B16D]/20 ring-1 ring-[#D6B16D]'
-                                    : 'border-[#2d2215] hover:border-neutral-500'
-                                }`}
-                              >
-                                <img src={imgUrl} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
-
-                                {idx === 0 && (
-                                  <span className="absolute bottom-1 left-1 right-1 text-center bg-black/85 backdrop-blur-sm text-[#D6B16D] text-[9px] uppercase font-bold py-0.5 rounded">
-                                    Cover
-                                  </span>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveImage(idx);
-                                  }}
-                                  className="absolute top-1 right-1 p-1 rounded-full bg-black/80 text-neutral-300 hover:text-red-400 hover:bg-black transition-colors"
-                                  title="Remove image"
+                              <div key={idx} className="flex flex-col gap-1.5">
+                                <div
+                                  onClick={() => handleSetPrimaryImage(idx)}
+                                  className={`relative aspect-square rounded-lg overflow-hidden border-2 cursor-pointer group transition-all ${
+                                    idx === 0
+                                      ? 'border-[#D6B16D] shadow-md shadow-[#D6B16D]/20 ring-1 ring-[#D6B16D]'
+                                      : 'border-[#2d2215] hover:border-neutral-500'
+                                  }`}
                                 >
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
+                                  <img src={imgUrl} alt={`Upload ${idx + 1}`} className="w-full h-full object-cover" />
+
+                                  {idx === 0 && (
+                                    <span className="absolute bottom-1 left-1 right-1 text-center bg-black/85 backdrop-blur-sm text-[#D6B16D] text-[9px] uppercase font-bold py-0.5 rounded">
+                                      Cover
+                                    </span>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveImage(idx);
+                                    }}
+                                    className="absolute top-1 right-1 p-1.5 rounded-full bg-black/85 text-neutral-300 hover:text-red-400 hover:bg-black transition-colors"
+                                    title="Remove image"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={imageColors[idx] || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setImageColors((prev) => {
+                                      const next = imageFiles.map((_, i) => prev[i] || '');
+                                      next[idx] = val;
+                                      return next;
+                                    });
+                                  }}
+                                  placeholder={idx === 0 ? 'Color (e.g. Emerald Green)' : `Color / Style #${idx + 1}`}
+                                  className="w-full bg-[#0a0805] border border-[#2d2215] rounded px-2 py-1.5 text-[11px] text-white placeholder:text-neutral-600 focus:outline-none focus:border-[#D6B16D]"
+                                />
                               </div>
                             ))}
                           </div>
@@ -2064,18 +2378,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                   </div>
 
                   <div>
-                    <label className="block text-neutral-300 mb-1 font-medium">Featured Image URL</label>
-                    <input
-                      type="text"
-                      value={newColImage}
-                      onChange={(e) => setNewColImage(e.target.value)}
-                      placeholder="/hero-steel.jpg or external image URL"
-                      className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
-                    />
+                    <label className="block text-neutral-300 mb-1 font-medium">Featured Display Image (URL or Device Upload)</label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={newColImage}
+                        onChange={(e) => setNewColImage(e.target.value)}
+                        placeholder="/hero-steel.jpg or external image URL"
+                        className="flex-1 bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                      />
+                      <label className="px-3.5 py-2 rounded bg-[#18130a] border border-[#D6B16D]/40 text-[#D6B16D] hover:bg-[#D6B16D] hover:text-black text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const compressed = await compressImageFile(file);
+                              setNewColImage(compressed);
+                            } catch {}
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
                       <span className="text-[10px] text-neutral-500 mr-1">Quick Select Photo:</span>
                       {[
                         { label: 'Steel Jewellery', url: '/hero-steel.jpg' },
+                        { label: 'Jewellery', url: '/hero-collection-enhanced.jpg' },
                         { label: 'Watches', url: '/hero-watches.jpg' },
                         { label: 'Bangles', url: '/hero-bangles.jpg' },
                         { label: 'Handbags', url: '/hero-handbags.jpg' },
@@ -2160,7 +2495,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                           </p>
                         </div>
 
-                        <div className="pt-2.5 border-t border-[#1e170e] flex items-center justify-between text-xs">
+                        <div className="pt-2.5 border-t border-[#1e170e] flex items-center justify-between gap-2 text-xs">
                           <button
                             type="button"
                             onClick={() => {
@@ -2173,19 +2508,404 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                             <ArrowRight className="w-3 h-3" />
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmTarget({ type: 'collection', id: col.id, name: col.name })}
-                            className="text-neutral-400 hover:text-red-400 p-1.5 rounded hover:bg-red-950/30 transition-colors cursor-pointer"
-                            title="Delete Collection"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingCollection(col);
+                                setEditColImage(col.image || '/hero-steel.jpg');
+                                setEditColTagline(col.tagline || '');
+                                setEditColDescription(col.description || '');
+                                setEditColError(null);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#18130a] border border-[#3b2e1b] text-[#D6B16D] hover:bg-[#D6B16D] hover:text-black text-[11px] font-semibold transition-colors cursor-pointer"
+                              title="Change Collection Display Image"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              <span>Change Image</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmTarget({ type: 'collection', id: col.id, name: col.name })}
+                              className="text-neutral-400 hover:text-red-400 p-1.5 rounded hover:bg-red-950/30 transition-colors cursor-pointer"
+                              title="Delete Collection"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: GIFT PACKAGING MANAGEMENT */}
+          {activeTab === 'packaging' && (
+            <div className="space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#221c13] pb-4">
+                <div>
+                  <h4 className="text-sm font-serif font-semibold text-white flex items-center gap-2">
+                    <Gift className="w-4 h-4 text-[#D6B16D]" />
+                    <span>
+                      Luxury Gift Boxes &amp; Packaging ({(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS).length})
+                    </span>
+                  </h4>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Har gift box ki picture, detail aur price (PKR) yahan se add karein — customers Shopping Bag aur Checkout mein box dekh kar select kar sakte hain.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingGiftBox(!isCreatingGiftBox)}
+                    className="sm:hidden px-3.5 py-2 bg-[#D6B16D] text-black text-xs font-semibold uppercase tracking-wider rounded-lg hover:bg-[#F4E0A5] transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isCreatingGiftBox ? 'Close Form' : 'Add Gift Box'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pkgSaving}
+                    onClick={() =>
+                      persistGiftPackagingList(
+                        settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS,
+                        'Gift packaging options & photos saved successfully!'
+                      )
+                    }
+                    className="px-4 py-2 bg-[#1a1409] border border-[#D6B16D]/70 text-[#D6B16D] hover:bg-[#D6B16D] hover:text-black text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{pkgSaving ? 'Saving...' : 'Save All Changes'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {pkgSuccessMessage && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-xl flex items-center gap-2 animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{pkgSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* CREATE NEW GIFT BOX FORM */}
+              {isCreatingGiftBox && (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!newBoxName.trim()) return;
+                    const current = settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS;
+                    const nextBox: GiftPackagingOption = {
+                      id: `pkg-${Date.now()}`,
+                      name: newBoxName.trim(),
+                      description: newBoxDescription.trim() || 'Luxury gift presentation box',
+                      price: Math.max(0, Number(newBoxPrice) || 0),
+                      image: newBoxImage.trim(),
+                      active: true,
+                    };
+                    await persistGiftPackagingList(
+                      [...current, nextBox],
+                      `Gift box "${nextBox.name}" add aur save ho gaya!`
+                    );
+                    setNewBoxName('');
+                    setNewBoxDescription('');
+                    setNewBoxPrice(300);
+                    setNewBoxImage('');
+                    setIsCreatingGiftBox(false);
+                  }}
+                  className="p-5 bg-[#0f0c08] border border-[#D6B16D]/40 rounded-xl space-y-4 animate-fadeIn"
+                >
+                  <div className="flex items-center justify-between border-b border-[#261f14] pb-2">
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-[#D6B16D]">
+                      Add New Gift Box
+                    </h5>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingGiftBox(false)}
+                      className="text-neutral-500 hover:text-white cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+                    <div className="sm:col-span-5">
+                      <label className="block text-neutral-300 mb-1 font-medium">Gift Box Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={newBoxName}
+                        onChange={(e) => setNewBoxName(e.target.value)}
+                        placeholder="e.g. Royal Red Velvet Ring Box"
+                        className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-neutral-300 mb-1 font-medium">Short Description</label>
+                      <input
+                        type="text"
+                        value={newBoxDescription}
+                        onChange={(e) => setNewBoxDescription(e.target.value)}
+                        placeholder="e.g. Silk lining + satin ribbon & wish card"
+                        className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-neutral-300 mb-1 font-medium">Box Price (PKR, 0 = Free) *</label>
+                      <input
+                        type="number"
+                        min={0}
+                        required
+                        value={newBoxPrice}
+                        onChange={(e) => setNewBoxPrice(Math.max(0, Number(e.target.value) || 0))}
+                        className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-[#D6B16D]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-[#0b0906] border border-[#241b0f] text-xs">
+                    <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-[#15110a] border border-[#3b2e1b] flex items-center justify-center shrink-0">
+                      {newBoxImage ? (
+                        <>
+                          <img src={newBoxImage} alt="New Gift Box Preview" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setNewBoxImage('')}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/80 text-white hover:bg-red-600 flex items-center justify-center cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <Gift className="w-7 h-7 text-[#D6B16D]/40" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <label className="block text-neutral-300 font-medium">
+                        Gift Box Picture (Customer ko Bag &amp; Checkout mein dikhegi)
+                      </label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={newBoxImage}
+                          onChange={(e) => setNewBoxImage(e.target.value)}
+                          placeholder="Image URL paste karein ya Upload Photo button dabayein"
+                          className="flex-1 min-w-0 bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D6B16D]"
+                        />
+                        <label className="px-3.5 py-2 rounded bg-[#18130a] border border-[#D6B16D]/50 text-[#D6B16D] hover:bg-[#D6B16D] hover:text-black font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload Box Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const compressed = await compressImageFile(file, 560, 0.72);
+                                setNewBoxImage(compressed);
+                              } catch (err) {
+                                console.error('Gift box upload error:', err);
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingGiftBox(false)}
+                      className="px-4 py-2 text-xs text-neutral-400 hover:text-white cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={pkgSaving || !newBoxName.trim()}
+                      className="px-5 py-2 rounded-lg bg-[#D6B16D] text-black text-xs font-bold uppercase tracking-wider hover:bg-[#F4E0A5] transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{pkgSaving ? 'Saving...' : 'Add & Save Gift Box'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* EXISTING GIFT BOXES GRID */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS).map((pkg, idx) => (
+                  <div
+                    key={pkg.id || idx}
+                    className="p-4 rounded-xl bg-[#0f0c08] border border-[#261e12] space-y-3 text-xs"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-[#15110a] border border-[#3b2e1b] flex items-center justify-center shrink-0">
+                        {pkg.image ? (
+                          <>
+                            <img
+                              src={pkg.image}
+                              alt={pkg.name || 'Gift Box'}
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const list = [...(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS)];
+                                list[idx] = { ...pkg, image: '' };
+                                setSettingsForm({ ...settingsForm, giftPackagingOptions: list });
+                              }}
+                              title="Remove Box Photo"
+                              className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/80 text-white hover:bg-red-600 flex items-center justify-center cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </>
+                        ) : (
+                          <Gift className="w-7 h-7 text-[#D6B16D]/40" />
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                        <div className="sm:col-span-8">
+                          <label className="block text-[10px] uppercase text-neutral-400 mb-1">Box Name *</label>
+                          <input
+                            type="text"
+                            value={pkg.name}
+                            onChange={(e) => {
+                              const list = [...(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS)];
+                              list[idx] = { ...pkg, name: e.target.value };
+                              setSettingsForm({ ...settingsForm, giftPackagingOptions: list });
+                            }}
+                            placeholder="e.g. Royal Velvet Box"
+                            className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-1.5 text-white focus:outline-none focus:border-[#D6B16D]"
+                          />
+                        </div>
+                        <div className="sm:col-span-4">
+                          <label className="block text-[10px] uppercase text-neutral-400 mb-1">Price (PKR)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={pkg.price}
+                            onChange={(e) => {
+                              const list = [...(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS)];
+                              list[idx] = { ...pkg, price: Math.max(0, Number(e.target.value) || 0) };
+                              setSettingsForm({ ...settingsForm, giftPackagingOptions: list });
+                            }}
+                            className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-1.5 text-white font-mono focus:outline-none focus:border-[#D6B16D]"
+                          />
+                        </div>
+                        <div className="sm:col-span-12">
+                          <label className="block text-[10px] uppercase text-neutral-400 mb-1">Short Description</label>
+                          <input
+                            type="text"
+                            value={pkg.description || ''}
+                            onChange={(e) => {
+                              const list = [...(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS)];
+                              list[idx] = { ...pkg, description: e.target.value };
+                              setSettingsForm({ ...settingsForm, giftPackagingOptions: list });
+                            }}
+                            placeholder="e.g. Cushioned box with gold ribbon & greeting card"
+                            className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-1.5 text-white focus:outline-none focus:border-[#D6B16D]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Photo URL & Upload Row */}
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={pkg.image || ''}
+                        onChange={(e) => {
+                          const list = [...(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS)];
+                          list[idx] = { ...pkg, image: e.target.value };
+                          setSettingsForm({ ...settingsForm, giftPackagingOptions: list });
+                        }}
+                        placeholder="Box photo URL paste karein ya Upload karein..."
+                        className="flex-1 min-w-0 bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-1.5 text-[11px] text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D6B16D]"
+                      />
+                      <label className="px-3 py-1.5 rounded bg-[#18130a] border border-[#D6B16D]/50 text-[#D6B16D] hover:bg-[#D6B16D] hover:text-black text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{pkg.image ? 'Change Photo' : 'Upload Photo'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const compressed = await compressImageFile(file, 560, 0.72);
+                              const list = [...(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS)];
+                              list[idx] = { ...pkg, image: compressed };
+                              setSettingsForm({ ...settingsForm, giftPackagingOptions: list });
+                            } catch (err) {
+                              console.error('Gift box photo upload error:', err);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#1e170e]">
+                      <label className="flex items-center gap-2 text-[11px] text-neutral-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={pkg.active !== false}
+                          onChange={(e) => {
+                            const list = [...(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS)];
+                            list[idx] = { ...pkg, active: e.target.checked };
+                            setSettingsForm({ ...settingsForm, giftPackagingOptions: list });
+                          }}
+                          className="accent-[#D6B16D]"
+                        />
+                        <span>Show to customers ({pkg.price <= 0 ? 'Free' : formatPKR(pkg.price)})</span>
+                      </label>
+                      {(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS).length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const list = (settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS).filter(
+                              (_, i) => i !== idx
+                            );
+                            persistGiftPackagingList(list, `Gift box "${pkg.name}" remove kar diya gaya.`);
+                          }}
+                          className="text-[11px] text-neutral-400 hover:text-red-400 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  disabled={pkgSaving}
+                  onClick={() =>
+                    persistGiftPackagingList(
+                      settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS,
+                      'Gift packaging options & photos saved successfully!'
+                    )
+                  }
+                  className="w-full sm:w-auto px-6 py-2.5 bg-[#D6B16D] text-black text-xs font-semibold uppercase tracking-wider rounded-lg hover:bg-[#F4E0A5] transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{pkgSaving ? 'Saving to Store...' : 'Save Gift Packaging'}</span>
+                </button>
               </div>
             </div>
           )}
@@ -2250,6 +2970,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     );
                   })}
                 </div>
+
+                <div className="px-3 py-2 rounded-lg bg-[#110e09] border border-[#241b0f] text-[11px] text-neutral-300 flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    Har naya order <strong className="text-[#D6B16D]">Order Placed</strong> mein aata hai. Call / WhatsApp / courier check karne ke baad har order ke <strong className="text-white">Manage</strong> button se usay <strong className="text-emerald-300">Confirmed / Processing / Shipped / Delivered / Cancelled</strong> mark karein (aur WhatsApp par aayi customization bhi wahin likh kar save kar sakti hain).
+                  </span>
+                </div>
               </div>
 
               {/* Order Edit Dialog */}
@@ -2266,29 +2992,84 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     </button>
                   </div>
 
-                  {/* Display Ordered Items with Images in edit modal */}
+                  {/* Display Ordered Items with Images + Editable WhatsApp Customization Note */}
                   <div className="p-3 rounded-lg bg-[#0c0906] border border-[#241a10] space-y-2">
                     <span className="text-[10px] uppercase tracking-wider text-neutral-400 font-semibold block">
-                      Ordered Items to Dispatch ({selectedOrderToEdit.items.length}):
+                      Ordered Items &amp; WhatsApp Customization ({selectedOrderToEdit.items.length}):
                     </span>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {selectedOrderToEdit.items.map((it, idx) => (
-                        <div key={idx} className="flex items-center gap-2.5 p-2 rounded bg-[#141009] border border-[#22180d]">
-                          <img
-                            src={it.image || '/hero-steel.jpg'}
-                            alt={it.name}
-                            className="w-10 h-10 rounded object-cover border border-[#3b2e1b] bg-black shrink-0"
-                            onError={(e) => { (e.target as HTMLImageElement).src = '/hero-steel.jpg'; }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <span className="font-serif text-white text-xs block truncate">{it.name}</span>
-                            <div className="flex items-center gap-2 text-[10px] text-neutral-400">
-                              <span>SKU: {it.sku}</span>
-                              <span className="text-[#D6B16D] font-bold">x{it.quantity}</span>
-                              <span>{formatPKR(it.price)}</span>
+                        <div key={idx} className="p-2 rounded bg-[#141009] border border-[#22180d] space-y-1.5">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={it.image || '/hero-steel.jpg'}
+                              alt={it.name}
+                              className="w-10 h-10 rounded object-cover border border-[#3b2e1b] bg-black shrink-0"
+                              onError={(e) => { (e.target as HTMLImageElement).src = '/hero-steel.jpg'; }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="font-serif text-white text-xs block truncate">{it.name}</span>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-neutral-400">
+                                <span>SKU: {it.sku}</span>
+                                {it.selectedColor && (
+                                  <span className="text-[#F4E0A5] font-semibold">Color: {it.selectedColor}</span>
+                                )}
+                                {it.selectedSize && <span>Size: {it.selectedSize}</span>}
+                                <span className="text-[#D6B16D] font-bold">x{it.quantity}</span>
+                                <span>{formatPKR(it.price)}</span>
+                              </div>
                             </div>
                           </div>
+                          <input
+                            type="text"
+                            maxLength={160}
+                            value={editItemCustomNotes[idx] ?? ''}
+                            onChange={(e) => {
+                              const next = [...editItemCustomNotes];
+                              next[idx] = e.target.value;
+                              setEditItemCustomNotes(next);
+                            }}
+                            placeholder="WhatsApp / Custom engraving / size note add karein..."
+                            className="w-full bg-[#0a0805] border border-[#2d2315] rounded px-2.5 py-1 text-[11px] text-[#F4E0A5] placeholder:text-neutral-500 focus:outline-none focus:border-[#D6B16D]"
+                          />
                         </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quick 1-Tap Order Status Buttons */}
+                  <div className="space-y-1.5">
+                    <span className="block text-[10px] uppercase tracking-wider text-neutral-400 font-semibold">
+                      Quick Status Select:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(
+                        [
+                          'Order Placed',
+                          'Confirmed',
+                          'Processing',
+                          'Shipped',
+                          'Out for Delivery',
+                          'Delivered',
+                          'Cancelled',
+                        ] as OrderStatus[]
+                      ).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setNewOrderStatus(st)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
+                            newOrderStatus === st
+                              ? st === 'Cancelled'
+                                ? 'bg-rose-600 text-white border-rose-500 font-bold'
+                                : st === 'Delivered'
+                                ? 'bg-emerald-600 text-white border-emerald-500 font-bold'
+                                : 'bg-[#D6B16D] text-black border-[#D6B16D] font-bold'
+                              : 'bg-[#0a0805] text-neutral-300 border-[#2d2315] hover:border-[#D6B16D]'
+                          }`}
+                        >
+                          {st}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -2336,8 +3117,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     </div>
                   </div>
 
-                  {/* Payment Proof & Verification History */}
+                  {/* Order / WhatsApp Customization Note + Payment Verification Note */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+                    <div>
+                      <label className="block text-neutral-400 mb-1">Order / WhatsApp Customization Note</label>
+                      <input
+                        type="text"
+                        maxLength={500}
+                        value={editOrderNotes}
+                        onChange={(e) => setEditOrderNotes(e.target.value)}
+                        placeholder="WhatsApp par customer ne jo custom detail di wo yahan likhein..."
+                        className="w-full bg-[#0a0805] border border-[#2d2315] rounded px-3 py-2 text-white"
+                      />
+                    </div>
                     <div>
                       <label className="block text-neutral-400 mb-1">Verification / Audit Note (Optional)</label>
                       <input
@@ -2596,6 +3388,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                                   setNewTrackingNumber(ord.trackingNumber || '');
                                   setNewPaymentStatus(ord.paymentStatus);
                                   setVerificationNote('');
+                                  setEditOrderNotes(ord.notes || '');
+                                  setEditItemCustomNotes((ord.items || []).map((it) => it.customNote || ''));
                                 }}
                                 className="px-3 py-1.5 rounded-lg bg-[#D6B16D] text-black text-xs font-semibold hover:bg-[#F4E0A5] transition-colors cursor-pointer"
                               >
@@ -2627,14 +3421,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                                   </span>
                                   <p className="text-[10px] text-neutral-400 font-mono truncate">
                                     {item.sku}
+                                    {item.selectedColor ? (
+                                      <span className="text-[#F4E0A5] font-semibold"> · Color: {item.selectedColor}</span>
+                                    ) : ''}
                                     {item.selectedSize ? ` · ${item.selectedSize}` : ''} ·{' '}
                                     <span className="text-[#D6B16D] font-bold">×{item.quantity}</span> ·{' '}
                                     <span className="text-neutral-200">{formatPKR(item.price * item.quantity)}</span>
                                   </p>
+                                  {item.customNote && (
+                                    <p className="text-[10px] text-[#F4E0A5] mt-0.5 break-words">
+                                      Custom: "{item.customNote}"
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             ))}
                           </div>
+                          {(ord.giftPackagingName || ord.giftMessage || ord.hideGiftPrice || ord.notes) && (
+                            <div className="mt-2.5 pt-2 border-t border-[#1c160e] flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-neutral-300">
+                              {ord.giftPackagingName && (
+                                <span className="inline-flex items-center gap-1 text-[#D6B16D]">
+                                  <Gift className="w-3 h-3 shrink-0" />
+                                  <span>
+                                    Packaging: <strong className="text-white">{ord.giftPackagingName}</strong> (
+                                    {(ord.giftPackagingFee || 0) === 0 ? 'Free' : formatPKR(ord.giftPackagingFee || 0)})
+                                  </span>
+                                </span>
+                              )}
+                              {ord.giftMessage && (
+                                <span className="text-[#F4E0A5]">Card: "{ord.giftMessage}"</span>
+                              )}
+                              {ord.hideGiftPrice && (
+                                <span className="text-amber-300 font-medium">Hide Price on Slip</span>
+                              )}
+                              {ord.notes && (
+                                <span className="text-sky-300">Note: {ord.notes}</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -2720,6 +3544,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     />
                     <span className="text-[10px] text-neutral-500 block mt-1">Exact location displayed on Google Maps card and invoices.</span>
                   </div>
+
+                  <div>
+                    <label className="block text-neutral-300 mb-1 font-medium">Top Announcement Bar Text</label>
+                    <input
+                      type="text"
+                      value={settingsForm.announcementText || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, announcementText: e.target.value })}
+                      placeholder="e.g. Cash on Delivery Nationwide • Fresh Arrivals Live (Leave empty to hide)"
+                      className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                    />
+                    <span className="text-[10px] text-neutral-500 block mt-1">Shown on top of website (mobile &amp; laptop). Leave blank to hide.</span>
+                  </div>
                 </div>
 
                 {/* 2. Direct Channels (Phone & WhatsApp) */}
@@ -2762,9 +3598,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                 {/* 3. Social Media URLs */}
                 <div className="space-y-3 pt-3 border-t border-[#1f1910]">
                   <h5 className="text-[11px] font-bold uppercase tracking-widest text-[#D6B16D]">
-                    3. Social Media Profiles (Instagram & TikTok)
+                    3. Social Media Profiles (Instagram, TikTok & WhatsApp Community)
                   </h5>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-neutral-300 mb-1 font-medium">Instagram Profile URL</label>
                       <input
@@ -2784,6 +3620,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                         onChange={(e) => setSettingsForm({ ...settingsForm, tiktokUrl: e.target.value })}
                         required
                         placeholder="https://www.tiktok.com/@yourhandle"
+                        className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-neutral-300 mb-1 font-medium">WhatsApp Community Link</label>
+                      <input
+                        type="url"
+                        value={settingsForm.whatsappCommunityUrl || settingsForm.whatsappUrl}
+                        onChange={(e) => setSettingsForm({ ...settingsForm, whatsappCommunityUrl: e.target.value })}
+                        placeholder="https://chat.whatsapp.com/..."
                         className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
                       />
                     </div>
@@ -3024,6 +3870,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* 5B. Quick Link to Dedicated Gift Packaging Tab */}
+                <div className="p-4 rounded-xl bg-[#110e09] border border-[#2d2417] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h5 className="text-[11px] font-bold uppercase tracking-widest text-[#D6B16D] flex items-center gap-1.5">
+                      <Gift className="w-3.5 h-3.5" />
+                      <span>
+                        Gift Packaging Options &amp; Box Photos ({(settingsForm.giftPackagingOptions || DEFAULT_GIFT_PACKAGING_OPTIONS).length})
+                      </span>
+                    </h5>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      Gift boxes ki photos aur alag-alag prices add/edit karne ke liye left menu mein <strong className="text-white">Gift Packaging</strong> tab use karein.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('packaging')}
+                    className="px-4 py-2 rounded-lg bg-[#1c160c] border border-[#D6B16D]/60 text-[#D6B16D] text-[11px] font-semibold hover:bg-[#D6B16D] hover:text-black transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <Gift className="w-3.5 h-3.5" />
+                    <span>Open Gift Packaging</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
                 {/* Submit Action */}
@@ -3595,8 +4465,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     <span className="font-serif font-medium text-white text-xs block leading-snug">{it.name}</span>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-neutral-400">
                       <span className="font-mono">SKU: {it.sku}</span>
+                      {it.selectedColor && <span className="text-[#F4E0A5] font-semibold">• Color: {it.selectedColor}</span>}
                       {it.selectedSize && <span>• Size: {it.selectedSize}</span>}
                     </div>
+                    {it.customNote && (
+                      <p className="text-[10px] text-[#F4E0A5] break-words">
+                        Custom: "{it.customNote}"
+                      </p>
+                    )}
                     <div className="flex items-center justify-between pt-1 text-xs">
                       <span className="font-mono text-neutral-300">{it.quantity} × {formatPKR(it.price)}</span>
                       <span className="font-mono font-semibold text-[#D6B16D]">{formatPKR(it.price * it.quantity)}</span>
@@ -3632,10 +4508,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                       </td>
                       <td className="p-3">
                         <span className="font-serif font-medium text-white block">{it.name}</span>
-                        <div className="flex items-center gap-2 text-[10px] text-neutral-400 mt-0.5">
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] text-neutral-400 mt-0.5">
                           <span className="font-mono">SKU: {it.sku}</span>
+                          {it.selectedColor && <span className="text-[#F4E0A5] font-semibold">• Color: {it.selectedColor}</span>}
                           {it.selectedSize && <span>• Size: {it.selectedSize}</span>}
                         </div>
+                        {it.customNote && (
+                          <p className="text-[10px] text-[#F4E0A5] mt-0.5 break-words">
+                            Custom: "{it.customNote}"
+                          </p>
+                        )}
                       </td>
                       <td className="p-3 text-center font-mono font-bold text-white">{it.quantity}</td>
                       <td className="p-3 text-right font-mono text-neutral-300">{formatPKR(it.price)}</td>
@@ -3649,6 +4531,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
               </div>
             </div>
 
+            {selectedInvoiceOrder.giftMessage && (
+              <div className="p-3 rounded-xl bg-[#18130a] border border-[#3b2e1b] text-xs text-[#F4E0A5]">
+                <strong>Gift Card Message:</strong> "{selectedInvoiceOrder.giftMessage}"
+                {selectedInvoiceOrder.hideGiftPrice ? ' • (Hide Price Slip Requested)' : ''}
+              </div>
+            )}
+
             {/* Financial Breakdown */}
             <div className="p-4 rounded-xl bg-[#141009] border border-[#2b2114] space-y-2 text-xs">
               <div className="flex justify-between text-neutral-400">
@@ -3661,6 +4550,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     Promo Discount{selectedInvoiceOrder.appliedPromo ? ` (${selectedInvoiceOrder.appliedPromo})` : ''}:
                   </span>
                   <span className="font-mono">- {formatPKR(selectedInvoiceOrder.discount)}</span>
+                </div>
+              )}
+              {selectedInvoiceOrder.giftPackagingName && (
+                <div className="flex justify-between text-neutral-300">
+                  <span>Gift Packaging ({selectedInvoiceOrder.giftPackagingName}):</span>
+                  <span className="font-mono text-neutral-200">
+                    {(selectedInvoiceOrder.giftPackagingFee || 0) === 0
+                      ? 'FREE'
+                      : formatPKR(selectedInvoiceOrder.giftPackagingFee || 0)}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between text-neutral-400">
@@ -3775,6 +4674,186 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
               className="w-full max-h-[75vh] object-contain rounded-lg bg-black"
             />
           </div>
+        </div>
+      )}
+
+      {/* EDIT COLLECTION IMAGE MODAL */}
+      {editingCollection && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md"
+          onClick={() => !editColSaving && setEditingCollection(null)}
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setEditColError(null);
+              const trimmedImg = editColImage.trim();
+              if (!trimmedImg) {
+                setEditColError('Please select or upload a collection image.');
+                return;
+              }
+              if (trimmedImg.length > 380000) {
+                setEditColError('Image size is too large. Please upload a smaller photo or use an image URL.');
+                return;
+              }
+              setEditColSaving(true);
+              try {
+                await updateCollection(editingCollection.id, {
+                  image: trimmedImg,
+                  tagline: editColTagline.trim() || editingCollection.tagline,
+                  description: editColDescription.trim() || editingCollection.description,
+                });
+                setColSuccessMessage(`Display image for "${editingCollection.name}" updated!`);
+                setEditingCollection(null);
+                setTimeout(() => setColSuccessMessage(null), 3500);
+              } catch (err: any) {
+                setEditColError(err?.message || 'Could not save collection image. Please verify permissions.');
+              } finally {
+                setEditColSaving(false);
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-lg w-full bg-[#120f0a] border border-[#D6B16D]/50 rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between border-b border-[#261f14] pb-3">
+              <div>
+                <h4 className="text-base font-serif font-bold text-white flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-[#D6B16D]" />
+                  <span>Change Collection Display Image</span>
+                </h4>
+                <p className="text-[11px] text-[#D6B16D] mt-0.5">{editingCollection.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !editColSaving && setEditingCollection(null)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/5"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editColError && (
+              <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                {editColError}
+              </div>
+            )}
+
+            {/* Live Image Preview */}
+            <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black border border-[#2b2214]">
+              <img
+                src={editColImage || '/hero-steel.jpg'}
+                alt={editingCollection.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Device Upload & URL Input */}
+            <div className="space-y-2 text-xs">
+              <label className="block text-neutral-300 font-medium">
+                Upload New Photo or Paste Image URL
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={editColImage}
+                  onChange={(e) => setEditColImage(e.target.value)}
+                  placeholder="/hero-steel.jpg or https://..."
+                  className="flex-1 bg-[#18130a] border border-[#3b2e1b] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                />
+                <label className="px-4 py-2 rounded-lg bg-[#D6B16D] text-black hover:bg-[#F4E0A5] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{editColUploading ? 'Processing...' : 'Upload Photo'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setEditColUploading(true);
+                      setEditColError(null);
+                      try {
+                        const compressed = await compressImageFile(file);
+                        setEditColImage(compressed);
+                      } catch {
+                        setEditColError('Could not process selected photo.');
+                      } finally {
+                        setEditColUploading(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-neutral-500 mr-1">Quick Select Studio Photo:</span>
+                {[
+                  { label: 'Steel', url: '/hero-steel.jpg' },
+                  { label: 'Jewellery', url: '/hero-collection-enhanced.jpg' },
+                  { label: 'Watches', url: '/hero-watches.jpg' },
+                  { label: 'Bangles', url: '/hero-bangles.jpg' },
+                  { label: 'Handbags', url: '/hero-handbags.jpg' },
+                  { label: 'Sets', url: '/hero-sets.jpg' },
+                  { label: 'Rings', url: '/hero-rings.jpg' },
+                  { label: 'Earrings', url: '/hero-earrings.jpg' },
+                ].map((preset) => (
+                  <button
+                    key={preset.url}
+                    type="button"
+                    onClick={() => setEditColImage(preset.url)}
+                    className={`px-2 py-0.5 rounded text-[10px] border transition-colors cursor-pointer ${
+                      editColImage === preset.url
+                        ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-bold'
+                        : 'bg-[#1a160f] text-neutral-400 border-[#2b2214] hover:text-white'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 text-xs pt-1">
+              <div>
+                <label className="block text-neutral-400 mb-1">Tagline / Subheading</label>
+                <input
+                  type="text"
+                  value={editColTagline}
+                  onChange={(e) => setEditColTagline(e.target.value)}
+                  className="w-full bg-[#18130a] border border-[#3b2e1b] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                />
+              </div>
+              <div>
+                <label className="block text-neutral-400 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={editColDescription}
+                  onChange={(e) => setEditColDescription(e.target.value)}
+                  className="w-full bg-[#18130a] border border-[#3b2e1b] rounded-lg px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#261f14]">
+              <button
+                type="button"
+                disabled={editColSaving}
+                onClick={() => setEditingCollection(null)}
+                className="px-4 py-2 rounded-lg text-xs text-neutral-400 hover:text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={editColSaving || editColUploading}
+                className="px-5 py-2 bg-[#D6B16D] hover:bg-[#F4E0A5] text-black text-xs font-bold uppercase tracking-wider rounded-lg flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{editColSaving ? 'Saving...' : 'Save Collection Image'}</span>
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

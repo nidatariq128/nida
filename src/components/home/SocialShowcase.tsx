@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink, Heart, MessageCircle, Play } from 'lucide-react';
+import { ExternalLink, Heart, MessageCircle } from 'lucide-react';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
 
 const InstagramIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
@@ -16,9 +16,15 @@ const TikTokIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" })
   </svg>
 );
 
+const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.455 5.711 1.456h.005c6.554 0 11.89-5.336 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+);
+
 interface SocialPost {
   id: string;
-  type: 'instagram' | 'tiktok';
+  type: 'instagram' | 'tiktok' | 'whatsapp';
   image: string;
   tag: string;
   caption: string;
@@ -32,7 +38,7 @@ const SOCIAL_POSTS: SocialPost[] = [
     type: 'instagram',
     image: '/hero-watches.jpg',
     tag: '#ChronographVibe',
-    caption: 'Precision horlogerie with sapphire-coated crystal & genuine leather strap.',
+    caption: 'Precision horlogerie, waterproof jewellery & structured handbags curated daily on Instagram.',
     likes: '1.4k',
     comments: '88'
   },
@@ -41,32 +47,38 @@ const SOCIAL_POSTS: SocialPost[] = [
     type: 'tiktok',
     image: '/hero-bangles.jpg',
     tag: '#BridalAccessories',
-    caption: 'Handcrafted velvet bridal bangles and royal kadas styled for Karachi brides.',
+    caption: 'Unboxings, bridal bangle styling & live timepiece showcases on our official TikTok.',
     likes: '4.8k',
     comments: '215'
   },
   {
     id: 'sp-3',
-    type: 'instagram',
-    image: '/hero-steel.jpg',
-    tag: '#WaterproofSteel',
-    caption: 'Zero tarnish, zero green skin. 316L surgical stainless steel tested daily.',
-    likes: '2.1k',
-    comments: '94'
-  },
-  {
-    id: 'sp-4',
-    type: 'tiktok',
+    type: 'whatsapp',
     image: '/hero-handbags.jpg',
-    tag: '#LuxuryTotes',
-    caption: 'Structured vegan leather totes with 18K PVD coated hardware.',
-    likes: '3.6k',
-    comments: '142'
+    tag: '#VIPCommunity',
+    caption: 'Join our WhatsApp Community for fresh arrivals, exclusive restock alerts & direct concierge support.',
+    likes: '2.9k',
+    comments: '164'
   }
 ];
 
 export const SocialShowcase: React.FC = () => {
   const { settings } = useStoreSettings();
+  const whatsappCommunityLink = settings.whatsappCommunityUrl || settings.whatsappUrl;
+
+  const getPostHref = (type: SocialPost['type']) => {
+    if (type === 'instagram') return settings.instagramUrl;
+    if (type === 'tiktok') return settings.tiktokUrl;
+    return whatsappCommunityLink;
+  };
+
+  const getPostHandle = (type: SocialPost['type']) => {
+    if (type === 'whatsapp') return 'ZN VIP Community';
+    const rawUrl = type === 'instagram' ? settings.instagramUrl : settings.tiktokUrl;
+    const fallback = type === 'instagram' ? 'chipmunk.8083543' : '@zeeshan.king4803';
+    const clean = rawUrl?.split('?')[0].replace(/\/+$/, '').split('/').pop() || fallback;
+    return clean.startsWith('@') ? clean : `@${clean}`;
+  };
 
   return (
     <section className="py-20 bg-[#0a0a0a] border-t border-[#1a1a1a] relative overflow-hidden">
@@ -83,37 +95,13 @@ export const SocialShowcase: React.FC = () => {
               Follow Us on Social Media
             </h2>
             <p className="hidden md:block text-neutral-400 text-sm mt-2 max-w-xl">
-              Tag <span className="text-[#D6B16D] font-medium">@znjewelers</span> or use <span className="text-[#D6B16D] font-medium">#ZNJewelersKarachi</span> to be featured in our boutique community showcase.
+              Follow us on Instagram & TikTok or join our official WhatsApp Community for fresh arrivals and VIP updates.
             </p>
-          </div>
-
-          {/* Social Action Buttons */}
-          <div className="flex items-center gap-3">
-            <a
-              href={settings.instagramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#833ab4]/20 via-[#fd1d1d]/20 to-[#fcb045]/20 border border-[#fd1d1d]/40 text-white text-xs font-semibold hover:border-[#fd1d1d] transition-all hover:scale-105"
-            >
-              <InstagramIcon className="w-4 h-4 text-[#fd1d1d]" />
-              Instagram
-              <ExternalLink className="w-3 h-3 text-neutral-400" />
-            </a>
-            <a
-              href={settings.tiktokUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/20 text-white text-xs font-semibold hover:border-[#00f2fe] transition-all hover:scale-105"
-            >
-              <TikTokIcon className="w-4 h-4 text-[#00f2fe]" />
-              TikTok
-              <ExternalLink className="w-3 h-3 text-neutral-400" />
-            </a>
           </div>
         </div>
 
-        {/* Social Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Strictly 3-Channel Grid: Instagram, TikTok, WhatsApp Community */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           {SOCIAL_POSTS.map((post) => (
             <div
               key={post.id}
@@ -135,10 +123,15 @@ export const SocialShowcase: React.FC = () => {
                       <InstagramIcon className="w-3 h-3 text-[#fd1d1d]" />
                       <span>Instagram</span>
                     </>
-                  ) : (
+                  ) : post.type === 'tiktok' ? (
                     <>
                       <TikTokIcon className="w-3 h-3 text-[#00f2fe]" />
                       <span>TikTok</span>
+                    </>
+                  ) : (
+                    <>
+                      <WhatsAppIcon className="w-3 h-3 text-[#25D366]" />
+                      <span>WhatsApp Community</span>
                     </>
                   )}
                 </div>
@@ -169,14 +162,16 @@ export const SocialShowcase: React.FC = () => {
                   {post.caption}
                 </p>
                 <div className="md:mt-3 md:pt-3 md:border-t md:border-[#1f1f1f] flex items-center justify-between text-[11px]">
-                  <span className="text-neutral-500 font-mono">@znjewelers</span>
+                  <span className="text-neutral-500 font-mono">
+                    {getPostHandle(post.type)}
+                  </span>
                   <a
-                    href={post.type === 'instagram' ? settings.instagramUrl : settings.tiktokUrl}
+                    href={getPostHref(post.type)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[#D6B16D] hover:underline flex items-center gap-1 font-medium"
                   >
-                    View Post <ExternalLink className="w-3 h-3" />
+                    {post.type === 'whatsapp' ? 'Join Community' : 'View Profile'} <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
               </div>
@@ -193,3 +188,4 @@ export const SocialShowcase: React.FC = () => {
     </section>
   );
 };
+

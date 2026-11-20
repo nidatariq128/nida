@@ -9,7 +9,11 @@ import {
   Phone,
   Mail,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  HeartHandshake,
+  ShoppingBag,
+  Gem,
+  Award
 } from 'lucide-react';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -75,7 +79,7 @@ export const Footer: React.FC<FooterProps> = ({
   return (
     <footer className="bg-[#050505] text-neutral-300 border-t border-[#1e1911]">
       
-      {/* 1. Value Badges */}
+      {/* 1. Value Badges & Category Highlights */}
       <div className="border-b border-[#1c1710] py-10 px-6 lg:px-12">
         <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="flex items-start gap-4 p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
@@ -105,6 +109,34 @@ export const Footer: React.FC<FooterProps> = ({
               <h4 className="text-sm font-serif font-semibold text-white tracking-wider">Anti-Tarnish 316L Steel</h4>
               <p className="text-xs text-neutral-400 mt-1">100% waterproof everyday jewellery & structured designer handbags.</p>
             </div>
+          </div>
+        </div>
+
+        {/* Curated Categories Strip with Value Badges */}
+        <div className="max-w-7xl mx-auto mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <Sparkles className="w-4 h-4 text-[#D6B16D] shrink-0" />
+            <span className="text-xs font-serif font-semibold text-white leading-tight">Luxury Watches</span>
+          </div>
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <ShieldCheck className="w-4 h-4 text-[#D6B16D] shrink-0" />
+            <span className="text-xs font-serif font-semibold text-white leading-tight">Watches & Bangles</span>
+          </div>
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <HeartHandshake className="w-4 h-4 text-[#D6B16D] shrink-0" />
+            <span className="text-xs font-serif font-semibold text-white leading-tight">Waterproof Steel</span>
+          </div>
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <ShoppingBag className="w-4 h-4 text-[#D6B16D] shrink-0" />
+            <span className="text-xs font-serif font-semibold text-white leading-tight">Handbags</span>
+          </div>
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <Gem className="w-4 h-4 text-[#D6B16D] shrink-0" />
+            <span className="text-xs font-serif font-semibold text-white leading-tight">Jewellery</span>
+          </div>
+          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <Award className="w-4 h-4 text-[#D6B16D] shrink-0" />
+            <span className="text-xs font-serif font-semibold text-white leading-tight">Stainless Steel Jewellery</span>
           </div>
         </div>
       </div>
@@ -303,7 +335,7 @@ export const Footer: React.FC<FooterProps> = ({
             </a>
 
             <a
-              href={`https://wa.me/${settings.whatsappNumber.replace(/[^0-9]/g, '')}`}
+              href={settings.whatsappCommunityUrl || settings.whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between p-2.5 rounded-xl bg-[#0f0f0f] border border-[#222] hover:border-[#25D366]/60 hover:bg-[#0d1611] transition-all group"
@@ -313,8 +345,8 @@ export const Footer: React.FC<FooterProps> = ({
                   <WhatsAppIcon className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-xs font-semibold text-white block">WhatsApp Concierge</span>
-                  <span className="text-[11px] text-neutral-500 font-mono">{settings.phone}</span>
+                  <span className="text-xs font-semibold text-white block">WhatsApp Community</span>
+                  <span className="text-[11px] text-neutral-500 font-mono">Official VIP Updates</span>
                 </div>
               </div>
               <ExternalLink className="w-3.5 h-3.5 text-neutral-500 group-hover:text-white transition-colors" />

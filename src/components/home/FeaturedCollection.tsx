@@ -13,17 +13,31 @@ export const FeaturedCollection: React.FC<FeaturedCollectionProps> = ({
   onQuickView,
   onNavigateShop
 }) => {
-  const { products } = useProducts();
-  const [activeTab, setActiveTab] = useState<'all' | 'Jewellery Sets' | 'Rings' | 'Earrings' | 'Watches' | 'Bangles' | 'Stainless Steel Jewellery' | 'Jewellery' | 'Handbags'>('all');
+  const { products, categories } = useProducts();
+  const [activeTab, setActiveTab] = useState<string>('all');
+
+  const getTabLabel = (name: string) => {
+    if (name === 'Jewellery Sets') return 'Bridal Sets';
+    if (name === 'Stainless Steel Jewellery') return 'Stainless Steel';
+    return name;
+  };
+
+  const tabCategories = categories.map((c) => c.name);
 
   const filtered = products.filter((p) => {
-    if (activeTab === 'all') return p.isFeatured || p.isNewArrival;
+    if (activeTab === 'all') return Boolean(p.isFeatured);
+    if (
+      activeTab === 'Watches' &&
+      (p.category === 'Watches' || p.category === "Men's Watches" || p.category === "Women's Watches")
+    ) {
+      return true;
+    }
     return p.category === activeTab;
   }).slice(0, 8);
 
   return (
-    <section className="py-20 px-6 lg:px-12 bg-[#0a0907] border-t border-[#1d1810]">
-      <div className="max-w-7xl mx-auto space-y-10">
+    <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-12 bg-[#0a0907] border-t border-[#1d1810]">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-10">
         
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#221c13] pb-8">
@@ -40,11 +54,11 @@ export const FeaturedCollection: React.FC<FeaturedCollectionProps> = ({
             </p>
           </div>
 
-          {/* Tab Filter */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* Dynamic Collection Filter Tabs */}
+          <div className="flex md:flex-wrap items-center gap-2 text-xs overflow-x-auto md:overflow-visible pb-1 md:pb-0 scrollbar-none">
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer shrink-0 whitespace-nowrap ${
                 activeTab === 'all'
                   ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
                   : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
@@ -52,91 +66,24 @@ export const FeaturedCollection: React.FC<FeaturedCollectionProps> = ({
             >
               All Featured
             </button>
-            <button
-              onClick={() => setActiveTab('Jewellery Sets')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Jewellery Sets'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Bridal Sets
-            </button>
-            <button
-              onClick={() => setActiveTab('Rings')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Rings'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Rings
-            </button>
-            <button
-              onClick={() => setActiveTab('Earrings')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Earrings'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Earrings
-            </button>
-            <button
-              onClick={() => setActiveTab('Watches')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Watches'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Watches
-            </button>
-            <button
-              onClick={() => setActiveTab('Bangles')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Bangles'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Bangles
-            </button>
-            <button
-              onClick={() => setActiveTab('Stainless Steel Jewellery')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Stainless Steel Jewellery'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Stainless Steel
-            </button>
-            <button
-              onClick={() => setActiveTab('Jewellery')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Jewellery'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Jewellery
-            </button>
-            <button
-              onClick={() => setActiveTab('Handbags')}
-              className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer ${
-                activeTab === 'Handbags'
-                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
-                  : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
-              }`}
-            >
-              Handbags
-            </button>
+            {tabCategories.map((catName) => (
+              <button
+                key={catName}
+                onClick={() => setActiveTab(catName)}
+                className={`px-3.5 py-1.5 rounded-full border transition-all text-[11px] uppercase tracking-wider cursor-pointer shrink-0 whitespace-nowrap ${
+                  activeTab === catName
+                    ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
+                    : 'bg-[#14110a] text-neutral-300 border-[#2f2718] hover:border-[#D6B16D]'
+                }`}
+              >
+                {getTabLabel(catName)}
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {filtered.map((product) => (
             <ProductCard
               key={product.id}

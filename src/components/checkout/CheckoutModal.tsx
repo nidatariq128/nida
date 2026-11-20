@@ -15,13 +15,15 @@ import {
   Check,
   Upload,
   Trash2,
+  Gift,
+  ZoomIn,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProducts } from '../../context/ProductContext';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
-import { PaymentMethod, Order } from '../../types';
+import { PaymentMethod, Order, GiftPackagingOption } from '../../types';
 import { formatPKR } from '../../lib/formatters';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -32,6 +34,18 @@ interface CheckoutModalProps {
   onViewOrderTracking: (orderNumber: string, phone: string) => void;
 }
 
+const FAKE_TEXT_TOKENS = new Set([
+  'test', 'testing', 'dummy', 'fake', 'asdf', 'asdfg', 'qwer', 'qwerty', 'zxcv',
+  'hjkl', 'fghj', 'abcd', 'abc', 'xyz', 'none', 'nothing', 'anything', 'unknown',
+  'kuch', 'bhi', 'patani', 'pata', 'nahi', 'nhi', 'na', 'nil', 'n/a', 'address',
+  'street', 'city', 'pakistan', 'ghar', 'home', 'sample', 'demo', 'random',
+]);
+
+const SHORT_VALID_TOKENS = new Set([
+  'dha', 'pechs', 'kda', 'fb', 'sec', 'ph', 'st', 'rd', 'blvd', 'blk', 'apt', 'flr',
+  'po', 'chs', 'askari', 'bahria', 'gulshan', 'clifton', 'johar', 'wapda', 'model',
+]);
+
 const isValidPakistanPhone = (raw: string): boolean => {
   const digits = raw.replace(/[^0-9]/g, '');
   if (digits.length < 10 || digits.length > 14) return false;
@@ -39,7 +53,113 @@ const isValidPakistanPhone = (raw: string): boolean => {
   if (local.startsWith('0092')) local = local.slice(4);
   else if (local.startsWith('92') && local.length >= 12) local = local.slice(2);
   else if (local.startsWith('0')) local = local.slice(1);
-  return /^3[0-9]{9}$/.test(local) || digits.length >= 10;
+  if (!/^3[0-9]{9}$/.test(local)) return false;
+  if (/^(\d)\1{9}$/.test(local)) return false;
+  return true;
+};
+
+const validatePakistanCity = (cityName: string): { valid: boolean; clean?: string; reason?: string } => {
+  const clean = cityName.trim().replace(/\s+/g, ' ');
+  if (!clean || clean.toLowerCase() === 'other pakistan city') {
+    return { valid: false, reason: 'Please select or type your valid delivery city name.' };
+  }
+  if (clean.length < 3 || clean.length > 50 || !/^[A-Za-z][A-Za-z\s.\-]{1,48}$/.test(clean)) {
+    return { valid: false, reason: 'Please enter a valid Pakistani city name (letters only).' };
+  }
+  if (FAKE_TEXT_TOKENS.has(clean.toLowerCase())) {
+    return { valid: false, reason: 'Please enter a real Pakistani city name (e.g. Multan, Abbottabad, Bahawalpur).' };
+  }
+  return { valid: true, clean };
+};
+
+const validatePakistanAddress = (raw: string): { valid: boolean; clean?: string; reason?: string } => {
+  const clean = raw.trim().replace(/\s+/g, ' ');
+  if (clean.length < 12 || clean.length > 350) {
+    return {
+      valid: false,
+      reason: 'Please enter a complete delivery address (minimum 12 characters with House #, Street, and Area/Sector).',
+    };
+  }
+  if (/(.)\1{4,}/i.test(clean)) {
+    return { valid: false, reason: 'Delivery address contains repeated gibberish characters. Please enter your real address.' };
+  }
+  const lower = clean.toLowerCase();
+  if (
+    lower.includes('kuch bhi') ||
+    lower.includes('kuch b ') ||
+    lower.includes('pta nhi') ||
+    lower.includes('pata nahi') ||
+    lower.includes('test address') ||
+    lower.includes('fake address')
+  ) {
+    return { valid: false, reason: 'Please enter a real deliverable street & house address.' };
+  }
+  const tokens = clean.split(/[\s,;/]+/).filter(Boolean);
+  if (tokens.length < 3) {
+    return {
+      valid: false,
+      reason: 'Please include House/Flat #, Street/Block, and Area/Sector (e.g. House 14, Street 5, DHA Phase 6).',
+    };
+  }
+  const alphaWords = tokens
+    .map((t) => t.replace(/[^A-Za-z]/g, ''))
+    .filter((w) => w.length >= 2);
+  if (alphaWords.length === 0 || !alphaWords.some((w) => w.length >= 3)) {
+    return {
+      valid: false,
+      reason: 'Please include real area and street names in your delivery address.',
+    };
+  }
+  const meaningfulWords = alphaWords.filter((w) => !FAKE_TEXT_TOKENS.has(w.toLowerCase()));
+  if (meaningfulWords.length === 0) {
+    return { valid: false, reason: 'Delivery address cannot be placeholder/test text.' };
+  }
+  const longGibberishWords = meaningfulWords.filter(
+    (w) => w.length >= 5 && !SHORT_VALID_TOKENS.has(w.toLowerCase()) && !/[aeiouy]/i.test(w)
+  );
+  if (longGibberishWords.length >= meaningfulWords.length) {
+    return { valid: false, reason: 'Please enter a valid, readable street and area name for courier dispatch.' };
+  }
+  return { valid: true, clean };
+};
+
+const validatePakistanPostalCode = (raw: string): { valid: boolean; clean?: string; reason?: string } => {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return { valid: false, reason: 'Please enter your valid 5-digit Pakistan Postal Code (e.g. 75190, 54000, 44000).' };
+  }
+  if (!/^[1-9][0-9]{4}$/.test(trimmed)) {
+    return { valid: false, reason: 'Pakistan Postal Code must be exactly 5 digits and cannot start with 0 (e.g. 74900, 54000).' };
+  }
+  if (
+    /^(\d)\1{4}$/.test(trimmed) ||
+    ['12345', '54321', '98765', '12312', '10000'].includes(trimmed)
+  ) {
+    return { valid: false, reason: `"${trimmed}" is not a valid Pakistan Post postal code. Please enter your area's real 5-digit postal code.` };
+  }
+  return { valid: true, clean: trimmed };
+};
+
+const validatePaymentReference = (raw: string): { valid: boolean; clean?: string; reason?: string } => {
+  const clean = raw.trim().replace(/\s+/g, ' ');
+  if (clean.length < 5 || clean.length > 64) {
+    return {
+      valid: false,
+      reason: 'Please enter a valid Transaction ID / TRX / TID reference (minimum 5 characters) after sending payment.',
+    };
+  }
+  const alnum = clean.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  if (
+    alnum.length < 5 ||
+    /^([a-z0-9])\1+$/.test(alnum) ||
+    ['12345', '123456', '1234567890', '54321', '00000', 'abcde', 'test1', 'asdfg', 'kuchbhi'].includes(alnum)
+  ) {
+    return {
+      valid: false,
+      reason: 'Please enter your real Easypaisa / JazzCash / Bank Transaction Reference ID.',
+    };
+  }
+  return { valid: true, clean };
 };
 
 const compressReceiptImage = (file: File): Promise<string> => {
@@ -82,8 +202,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onClose,
   onViewOrderTracking,
 }) => {
-  const { items, subtotal, discount, appliedPromo, calculateShippingForCity, clearCart } =
-    useCart();
+  const {
+    items,
+    subtotal,
+    discount,
+    appliedPromo,
+    calculateShippingForCity,
+    clearCart,
+    giftPackagingOptions,
+    selectedGiftPackaging,
+    setSelectedGiftPackagingId,
+    giftPackagingFee,
+    giftMessage,
+    setGiftMessage,
+    hideGiftPrice,
+    setHideGiftPrice,
+  } = useCart();
   const { user, profile } = useAuth();
   const { applyStockUpdates } = useProducts();
   const { settings } = useStoreSettings();
@@ -98,6 +232,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [customerWhatsappNotified, setCustomerWhatsappNotified] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string>('');
   const [onlineCardConfigured, setOnlineCardConfigured] = useState<boolean>(false);
+  const [previewBox, setPreviewBox] = useState<GiftPackagingOption | null>(null);
 
   // Form Fields
   const [fullName, setFullName] = useState(profile?.displayName || user?.displayName || '');
@@ -107,6 +242,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   // Step 2: Shipping
   const [country] = useState('Pakistan');
   const [city, setCity] = useState('Karachi');
+  const [customCity, setCustomCity] = useState('');
   const [address, setAddress] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
@@ -118,9 +254,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [uploadingProof, setUploadingProof] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  const resolvedCity = city === 'Other Pakistan City' ? customCity.trim() : city;
+
   // Dynamic city-aware shipping & total
-  const activeShippingCost = calculateShippingForCity(city);
-  const activeTotal = Math.max(0, subtotal - discount + activeShippingCost);
+  const activeShippingCost = calculateShippingForCity(resolvedCity || city);
+  const activeTotal = Math.max(0, subtotal - discount + activeShippingCost + giftPackagingFee);
 
   // Reset modal & check payment gateway capability when opened
   useEffect(() => {
@@ -132,6 +270,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setInvoiceCopied(false);
       setWhatsappAutoPushed(false);
       setPaymentProofUrl(undefined);
+      setCustomCity('');
       setIdempotencyKey(`ord-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
 
       if (profile?.displayName && !fullName) setFullName(profile.displayName);
@@ -182,11 +321,41 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const handlePlaceOrder = async () => {
     if (items.length === 0 || submitting) return;
 
+    const cityCheck = validatePakistanCity(resolvedCity);
+    if (!cityCheck.valid) {
+      setValidationError(cityCheck.reason || 'Please enter a valid delivery city.');
+      return;
+    }
+    const addrCheck = validatePakistanAddress(address);
+    if (!addrCheck.valid) {
+      setValidationError(addrCheck.reason || 'Please enter a valid delivery address.');
+      return;
+    }
+    const postalCheck = validatePakistanPostalCode(postalCode);
+    if (!postalCheck.valid) {
+      setValidationError(postalCheck.reason || 'Please enter a valid 5-digit postal code.');
+      return;
+    }
+
     if (paymentMethod === 'online_card' && !onlineCardConfigured) {
       setValidationError(
         'Online card gateway is not configured on this store yet. Please choose Easypaisa, JazzCash, Bank Transfer, or Cash on Delivery.'
       );
       return;
+    }
+
+    if (['easypaisa', 'jazzcash', 'bank_transfer'].includes(paymentMethod)) {
+      const refCheck = validatePaymentReference(paymentReference);
+      if (!refCheck.valid) {
+        setValidationError(refCheck.reason || 'Please enter a valid Transaction ID / TRX reference.');
+        return;
+      }
+      if (!paymentProofUrl || !paymentProofUrl.startsWith('data:image/')) {
+        setValidationError(
+          'Please upload your Easypaisa / JazzCash / Bank payment receipt screenshot in Step 3 before placing the order.'
+        );
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -203,9 +372,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         }
       }
 
-      const fullAddress = postalCode.trim()
-        ? `${address.trim()}, ${city} (${postalCode.trim()}), ${country}`
-        : `${address.trim()}, ${city}, ${country}`;
+      const finalCity = cityCheck.clean || resolvedCity;
+      const cleanPostal = postalCheck.clean || postalCode.trim();
+      const fullAddress = `${addrCheck.clean || address.trim()}, ${finalCity} (${cleanPostal}), ${country}`;
 
       const response = await fetch('/api/orders/create', {
         method: 'POST',
@@ -215,17 +384,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           customerEmail: email.trim(),
           customerPhone: phone.trim(),
           shippingAddress: fullAddress,
-          city,
+          city: finalCity,
+          postalCode: cleanPostal,
           paymentMethod,
           paymentReference: paymentReference.trim() || undefined,
           paymentProofUrl,
           notes: deliveryNotes.trim() || undefined,
           promoCode: appliedPromo || undefined,
+          giftPackagingId: selectedGiftPackaging?.id || undefined,
+          giftMessage: giftMessage.trim() || undefined,
+          hideGiftPrice: hideGiftPrice || undefined,
           idempotencyKey,
           items: items.map((i) => ({
             productId: i.product.id,
             quantity: i.quantity,
             selectedSize: i.selectedSize,
+            selectedColor: i.selectedColor,
+            selectedImage: i.selectedImage,
+            customNote: i.customNote,
           })),
         }),
       });
@@ -281,6 +457,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 image: it.image,
               };
               if (it.selectedSize) obj.selectedSize = it.selectedSize;
+              if (it.selectedColor) obj.selectedColor = it.selectedColor;
+              if (it.customNote) obj.customNote = it.customNote;
+              if (typeof it.customizationFee === 'number' && it.customizationFee > 0) {
+                obj.customizationFee = it.customizationFee;
+              }
               return obj;
             }),
             subtotal: serverOrder.subtotal,
@@ -293,6 +474,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             createdAt: serverOrder.createdAt,
           };
           if (serverOrder.appliedPromo) cleanOrder.appliedPromo = serverOrder.appliedPromo;
+          if (serverOrder.giftPackagingId) cleanOrder.giftPackagingId = serverOrder.giftPackagingId;
+          if (serverOrder.giftPackagingName) cleanOrder.giftPackagingName = serverOrder.giftPackagingName;
+          if (typeof serverOrder.giftPackagingFee === 'number') {
+            cleanOrder.giftPackagingFee = serverOrder.giftPackagingFee;
+          }
+          if (serverOrder.giftMessage) cleanOrder.giftMessage = serverOrder.giftMessage;
+          if (typeof serverOrder.hideGiftPrice === 'boolean') {
+            cleanOrder.hideGiftPrice = serverOrder.hideGiftPrice;
+          }
           if (serverOrder.paymentReference) cleanOrder.paymentReference = serverOrder.paymentReference;
           if (serverOrder.paymentProofUrl) cleanOrder.paymentProofUrl = serverOrder.paymentProofUrl;
           if (serverOrder.notes) cleanOrder.notes = serverOrder.notes;
@@ -352,12 +542,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       ord.items
         .map(
           (i, idx) =>
-            `[${idx + 1}] ${i.name}${i.selectedSize ? ` (Size: ${i.selectedSize})` : ''} (Qty: ${i.quantity}) - Rs. ${(i.price * i.quantity).toLocaleString()}`
+            `[${idx + 1}] ${i.name}${i.selectedColor ? ` (Color: ${i.selectedColor})` : ''}${i.selectedSize ? ` (Size: ${i.selectedSize})` : ''}${i.customNote ? ` [Custom: "${i.customNote}"]` : ''} (Qty: ${i.quantity}) - Rs. ${(i.price * i.quantity).toLocaleString()}`
         )
         .join('\n') +
       `\n----------------------------------------\n` +
       `Subtotal           : Rs. ${ord.subtotal.toLocaleString()}\n` +
       (ord.discount ? `Discount           : - Rs. ${ord.discount.toLocaleString()}\n` : '') +
+      (ord.giftPackagingName ? `Gift Packaging     : ${ord.giftPackagingName} (${(ord.giftPackagingFee || 0) === 0 ? 'Free' : `Rs. ${(ord.giftPackagingFee || 0).toLocaleString()}`})\n` : '') +
+      (ord.giftMessage ? `Gift Card Message  : ${ord.giftMessage}\n` : '') +
+      (ord.hideGiftPrice ? `Gift Price Slip    : Hide price requested\n` : '') +
       `Insured Delivery   : ${ord.shippingCost === 0 ? 'Complimentary Free' : `Rs. ${ord.shippingCost.toLocaleString()}`}\n` +
       `TOTAL PAYABLE      : Rs. ${ord.total.toLocaleString()}\n` +
       `Payment Method     : ${ord.paymentMethod.toUpperCase().replace('_', ' ')}\n` +
@@ -376,7 +569,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     const itemsLines = ord.items
       .map(
         (i, idx) =>
-          `${idx + 1}. ${i.name} (${i.sku}) x${i.quantity} — Rs. ${(i.price * i.quantity).toLocaleString()}`
+          `${idx + 1}. ${i.name}${i.selectedColor ? ` [Color: ${i.selectedColor}]` : ''}${i.selectedSize ? ` [Size: ${i.selectedSize}]` : ''}${i.customNote ? ` [Custom: "${i.customNote}"]` : ''} (${i.sku}) x${i.quantity} — Rs. ${(i.price * i.quantity).toLocaleString()}`
       )
       .join('\n');
 
@@ -390,6 +583,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       `*Ordered Items:*\n${itemsLines}\n\n` +
       `*Subtotal:* Rs. ${ord.subtotal.toLocaleString()}\n` +
       (ord.discount ? `*Discount:* - Rs. ${ord.discount.toLocaleString()}\n` : '') +
+      (ord.giftPackagingName ? `*Gift Packaging:* ${ord.giftPackagingName} (${(ord.giftPackagingFee || 0) === 0 ? 'Free' : `Rs. ${(ord.giftPackagingFee || 0).toLocaleString()}`})\n` : '') +
+      (ord.giftMessage ? `*Gift Card Message:* ${ord.giftMessage}\n` : '') +
+      (ord.hideGiftPrice ? `*Gift Packing Slip:* Hide price\n` : '') +
       `*Courier:* ${ord.shippingCost === 0 ? 'Free' : `Rs. ${ord.shippingCost.toLocaleString()}`}\n` +
       `*Total Amount:* Rs. ${ord.total.toLocaleString()}\n` +
       `*Payment Method:* ${ord.paymentMethod.toUpperCase().replace('_', ' ')}\n` +
@@ -562,7 +758,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </label>
                     <select
                       value={city}
-                      onChange={(e) => setCity(e.target.value)}
+                      onChange={(e) => {
+                        setCity(e.target.value);
+                        if (validationError) setValidationError(null);
+                      }}
                       className="w-full bg-[#130f0a] border border-[#2d2417] rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D6B16D]"
                     >
                       <option value="Karachi">
@@ -583,6 +782,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </div>
                 </div>
 
+                {city === 'Other Pakistan City' && (
+                  <div>
+                    <label className="block text-xs uppercase tracking-wider text-[#D6B16D] mb-1">
+                      Enter Your City Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={customCity}
+                      onChange={(e) => {
+                        setCustomCity(e.target.value);
+                        if (validationError) setValidationError(null);
+                      }}
+                      required
+                      placeholder="e.g. Bahawalpur, Abbottabad, Sukkur, Sargodha"
+                      className="w-full bg-[#130f0a] border border-[#D6B16D]/60 rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D6B16D]"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs uppercase tracking-wider text-neutral-300 mb-1">
                     Complete Street / House Address *
@@ -595,7 +813,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       if (validationError) setValidationError(null);
                     }}
                     required
-                    placeholder="House/Apartment #, Street, Area/Sector, Nearby Landmark"
+                    placeholder="House/Apartment #, Street #, Block/Sector, Area, Landmark"
                     className="w-full bg-[#130f0a] border border-[#2d2417] rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D6B16D]"
                   />
                 </div>
@@ -603,14 +821,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs uppercase tracking-wider text-neutral-300 mb-1">
-                      Postal Code (Optional)
+                      Postal Code (5-Digit Pakistan Post) *
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      maxLength={5}
                       value={postalCode}
-                      onChange={(e) => setPostalCode(e.target.value)}
-                      placeholder="e.g. 74900"
-                      className="w-full bg-[#130f0a] border border-[#2d2417] rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#D6B16D]"
+                      onChange={(e) => {
+                        setPostalCode(e.target.value.replace(/[^0-9]/g, ''));
+                        if (validationError) setValidationError(null);
+                      }}
+                      required
+                      placeholder="e.g. 74900, 54000, 44000"
+                      className="w-full bg-[#130f0a] border border-[#2d2417] rounded-lg px-4 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-[#D6B16D]"
                     />
                   </div>
                   <div>
@@ -626,6 +850,116 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     />
                   </div>
                 </div>
+
+                {/* Gift Packaging Selection inside Step 2 */}
+                {giftPackagingOptions.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-[#110e08] border border-[#2d2417] space-y-2.5 mt-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs uppercase tracking-wider text-[#D6B16D] font-semibold flex items-center gap-1.5">
+                        <Gift className="w-3.5 h-3.5 shrink-0" />
+                        <span>Gift Packaging Option</span>
+                      </span>
+                      {selectedGiftPackaging && (
+                        <span className="text-[11px] font-mono text-[#F4E0A5]">
+                          {giftPackagingFee === 0 ? 'Complimentary' : `+ ${formatPKR(giftPackagingFee)}`}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {giftPackagingOptions.map((opt) => {
+                        const isSelected = selectedGiftPackaging?.id === opt.id;
+                        return (
+                          <div
+                            key={opt.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedGiftPackagingId(opt.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedGiftPackagingId(opt.id);
+                              }
+                            }}
+                            className={`text-left p-2.5 rounded-lg border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                              isSelected
+                                ? 'bg-[#1a1409] border-[#D6B16D] ring-1 ring-[#D6B16D]/30'
+                                : 'bg-[#0a0805] border-[#261e13] hover:border-[#3d311c]'
+                            }`}
+                          >
+                            <div className="space-y-2">
+                              {opt.image ? (
+                                <div className="relative w-full h-28 rounded-md overflow-hidden bg-[#161109] border border-[#2d2417] group">
+                                  <img
+                                    src={opt.image}
+                                    alt={opt.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPreviewBox(opt);
+                                    }}
+                                    title="Zoom Box Photo"
+                                    className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-black/80 text-[#F4E0A5] text-[10px] font-medium flex items-center gap-1 hover:bg-[#D6B16D] hover:text-black transition-colors cursor-zoom-in"
+                                  >
+                                    <ZoomIn className="w-3 h-3" />
+                                    <span>View</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="w-full h-14 rounded-md bg-[#141009] border border-[#261e13] flex items-center justify-center text-[#D6B16D]/50">
+                                  <Gift className="w-5 h-5" />
+                                </div>
+                              )}
+                              <div>
+                                <span className="text-xs font-medium text-white block leading-snug">
+                                  {opt.name}
+                                </span>
+                                {opt.description && (
+                                  <span className="text-[10px] text-neutral-400 block leading-snug mt-0.5">
+                                    {opt.description}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#211a10]">
+                              <span className="text-[11px] font-mono font-semibold text-[#D6B16D]">
+                                {opt.price <= 0 ? 'Free' : `+ ${formatPKR(opt.price)}`}
+                              </span>
+                              {isSelected && (
+                                <span className="text-[9px] uppercase tracking-wider text-emerald-400 font-semibold">
+                                  Selected
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 items-center">
+                      <input
+                        type="text"
+                        maxLength={180}
+                        value={giftMessage}
+                        onChange={(e) => setGiftMessage(e.target.value)}
+                        placeholder="Optional Gift Card Message..."
+                        className="w-full bg-[#0a0805] border border-[#2d2417] rounded-lg px-3 py-2 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-[#D6B16D]"
+                      />
+                      <label className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={hideGiftPrice}
+                          onChange={(e) => setHideGiftPrice(e.target.checked)}
+                          className="accent-[#D6B16D]"
+                        />
+                        <span>Hide price on parcel packing slip</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -783,12 +1117,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {paymentMethod === 'easypaisa' && (
                   <div className="space-y-3 text-xs">
                     <div className="flex items-center justify-between border-b border-[#291f13] pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-xs uppercase tracking-wider text-[#D6B16D] font-bold">
-                          Official Easypaisa Account Details
-                        </span>
-                      </div>
+                      <span className="text-xs uppercase tracking-wider text-[#D6B16D] font-bold">
+                        Official Easypaisa Account Details
+                      </span>
                       <span className="text-[10px] text-neutral-400">Direct Mobile Account</span>
                     </div>
 
@@ -827,22 +1158,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                     <p className="text-[11px] text-neutral-300 leading-relaxed">
                       {settings.easypaisaInstructions ||
-                        'Open your Easypaisa app, transfer the order amount, and paste the 11-digit TRX ID below.'}
+                        'Open your Easypaisa app, transfer the order amount, and enter your TRX ID plus payment screenshot below.'}
                     </p>
 
                     <div>
-                      <label className="block text-[11px] text-neutral-300 mb-1 font-medium">
-                        Easypaisa Transaction ID (TRX ID) / Sender Phone Number:
+                      <label className="block text-[11px] text-neutral-200 mb-1 font-medium">
+                        Easypaisa Transaction ID (TRX ID) *
                       </label>
                       <input
                         type="text"
                         value={paymentReference}
-                        onChange={(e) => setPaymentReference(e.target.value)}
-                        placeholder="e.g. TRX 20491829141 or 0317-XXXXXXX"
+                        onChange={(e) => {
+                          setPaymentReference(e.target.value);
+                          if (validationError) setValidationError(null);
+                        }}
+                        required
+                        placeholder="e.g. TRX 20491829141"
                         className="w-full bg-[#0a0805] border border-[#2d2315] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D6B16D]"
                       />
-                      <span className="text-[10px] text-neutral-500 mt-1 block">
-                        Payment stays pending verification until our store concierge confirms the TRX ID or receipt screenshot.
+                      <span className="text-[10px] text-neutral-400 mt-1 block">
+                        Easypaisa orders cannot proceed without your valid TRX ID and payment receipt screenshot.
                       </span>
                     </div>
                   </div>
@@ -852,12 +1187,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {paymentMethod === 'jazzcash' && (
                   <div className="space-y-3 text-xs">
                     <div className="flex items-center justify-between border-b border-[#291f13] pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                        <span className="text-xs uppercase tracking-wider text-[#D6B16D] font-bold">
-                          Official JazzCash Account Details
-                        </span>
-                      </div>
+                      <span className="text-xs uppercase tracking-wider text-[#D6B16D] font-bold">
+                        Official JazzCash Account Details
+                      </span>
                       <span className="text-[10px] text-neutral-400">Mobile Account & Till</span>
                     </div>
 
@@ -924,14 +1256,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </p>
 
                     <div>
-                      <label className="block text-[11px] text-neutral-300 mb-1 font-medium">
-                        JazzCash Transaction ID (TID) / Sender Phone Number:
+                      <label className="block text-[11px] text-neutral-200 mb-1 font-medium">
+                        JazzCash Transaction ID (TID) *
                       </label>
                       <input
                         type="text"
                         value={paymentReference}
-                        onChange={(e) => setPaymentReference(e.target.value)}
-                        placeholder="e.g. TID 984021481 or 0317-XXXXXXX"
+                        onChange={(e) => {
+                          setPaymentReference(e.target.value);
+                          if (validationError) setValidationError(null);
+                        }}
+                        required
+                        placeholder="e.g. TID 984021481"
                         className="w-full bg-[#0a0805] border border-[#2d2315] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D6B16D]"
                       />
                     </div>
@@ -942,12 +1278,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {paymentMethod === 'bank_transfer' && (
                   <div className="space-y-3 text-xs">
                     <div className="flex items-center justify-between border-b border-[#291f13] pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                        <span className="text-xs uppercase tracking-wider text-[#D6B16D] font-bold">
-                          Official Bank Account Details
-                        </span>
-                      </div>
+                      <span className="text-xs uppercase tracking-wider text-[#D6B16D] font-bold">
+                        Official Bank Account Details
+                      </span>
                       <span className="text-[10px] text-neutral-400">
                         1Link & Raast Instant Transfer
                       </span>
@@ -1031,13 +1364,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </p>
 
                     <div>
-                      <label className="block text-[11px] text-neutral-300 mb-1 font-medium">
-                        Online Banking Reference / Deposit Slip Number:
+                      <label className="block text-[11px] text-neutral-200 mb-1 font-medium">
+                        Online Banking Reference / Deposit Slip Number *
                       </label>
                       <input
                         type="text"
                         value={paymentReference}
-                        onChange={(e) => setPaymentReference(e.target.value)}
+                        onChange={(e) => {
+                          setPaymentReference(e.target.value);
+                          if (validationError) setValidationError(null);
+                        }}
+                        required
                         placeholder="e.g. FT26042109485 / Raast Ref"
                         className="w-full bg-[#0a0805] border border-[#2d2315] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#D6B16D]"
                       />
@@ -1045,18 +1382,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </div>
                 )}
 
-                {/* Receipt Screenshot Upload for Digital Transfers */}
+                {/* Mandatory Receipt Screenshot Upload for Digital Transfers */}
                 {(paymentMethod === 'easypaisa' ||
                   paymentMethod === 'jazzcash' ||
                   paymentMethod === 'bank_transfer') && (
                   <div className="pt-3 border-t border-[#261d12] space-y-2 text-xs">
-                    <span className="text-[11px] text-neutral-300 font-medium block">
-                      Upload Payment Proof Screenshot (Optional):
-                    </span>
+                    <div className="space-y-0.5">
+                      <span className="text-[11px] text-[#F4E0A5] font-semibold block">
+                        Upload Payment Receipt Screenshot (Required) *
+                      </span>
+                      <span className="text-[10px] text-neutral-400 block">
+                        Easypaisa / JazzCash / Bank order confirm karne ke liye payment receipt ka screenshot attach karna zaroori hai.
+                      </span>
+                    </div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <label className="px-3 py-1.5 rounded-lg bg-[#211a10] hover:bg-[#332717] border border-[#3d311c] text-[#D6B16D] text-[11px] font-medium flex items-center gap-1.5 cursor-pointer transition-colors">
+                      <label className="px-3.5 py-2 rounded-lg bg-[#211a10] hover:bg-[#332717] border border-[#D6B16D]/50 text-[#D6B16D] text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors">
                         <Upload className="w-3.5 h-3.5" />
-                        <span>{uploadingProof ? 'Compressing...' : paymentProofUrl ? 'Replace Screenshot' : 'Attach Screenshot'}</span>
+                        <span>{uploadingProof ? 'Compressing...' : paymentProofUrl ? 'Replace Screenshot' : 'Upload Receipt Screenshot *'}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -1064,7 +1406,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           className="hidden"
                         />
                       </label>
-                      {paymentProofUrl && (
+                      {paymentProofUrl ? (
                         <div className="flex items-center gap-2 bg-[#0a0805] px-2.5 py-1 rounded-lg border border-emerald-700/50">
                           <img
                             src={paymentProofUrl}
@@ -1083,6 +1425,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <Trash2 className="w-3 h-3" />
                           </button>
                         </div>
+                      ) : (
+                        <span className="text-[10px] text-amber-300/90 font-medium">
+                          No screenshot attached yet
+                        </span>
                       )}
                     </div>
                   </div>
@@ -1139,32 +1485,48 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
               {/* Items Summary */}
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {items.map((item, idx) => (
+                {items.map((item, idx) => {
+                  const customFee = item.customNote
+                    ? Math.max(0, Number(item.customizationFee ?? item.product.customizationFee ?? 0) || 0)
+                    : 0;
+                  const unitEffective = (item.product.salePrice ?? item.product.price) + customFee;
+                  return (
                   <div
                     key={idx}
-                    className="flex items-center justify-between p-3 rounded-lg bg-[#110e09] border border-[#211a10]"
+                    className="flex items-center justify-between gap-2 p-3 rounded-lg bg-[#110e09] border border-[#211a10]"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <img
-                        src={item.product.images[0]}
+                        src={item.selectedImage || item.product.images[0] || '/hero-steel.jpg'}
                         alt={item.product.name}
-                        className="w-11 h-11 object-cover rounded"
+                        className="w-11 h-11 object-cover rounded shrink-0"
                       />
-                      <div>
-                        <h5 className="text-xs font-serif font-semibold text-white">
+                      <div className="min-w-0">
+                        <h5 className="text-xs font-serif font-semibold text-white truncate">
                           {item.product.name}
                         </h5>
-                        <div className="text-[10px] text-neutral-400 flex items-center gap-2 mt-0.5">
+                        <div className="text-[10px] text-neutral-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                           <span>Qty: {item.quantity}</span>
+                          {item.selectedColor && (
+                            <span>
+                              • Color: <strong className="text-[#D6B16D]">{item.selectedColor}</strong>
+                            </span>
+                          )}
                           {item.selectedSize && <span>• Size: {item.selectedSize}</span>}
                         </div>
+                        {item.customNote && (
+                          <p className="text-[10px] text-[#F4E0A5] mt-0.5 break-words">
+                            Custom: "{item.customNote}"{customFee > 0 ? ` (+${formatPKR(customFee)}/pc)` : ''}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <span className="text-xs font-mono font-semibold text-[#D6B16D]">
-                      {formatPKR((item.product.salePrice ?? item.product.price) * item.quantity)}
+                    <span className="text-xs font-mono font-semibold text-[#D6B16D] shrink-0">
+                      {formatPKR(unitEffective * item.quantity)}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Client & Shipping Review Box */}
@@ -1182,11 +1544,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     Delivery & Payment
                   </span>
                   <p className="text-white">
-                    {address}, {city}
+                    {address}, {resolvedCity} ({postalCode})
                   </p>
                   <p className="text-[#D6B16D] capitalize font-medium">
                     Payment: {paymentMethod.replace('_', ' ')}
                   </p>
+                  {selectedGiftPackaging && (
+                    <div className="flex items-center gap-2 pt-0.5">
+                      {selectedGiftPackaging.image && (
+                        <img
+                          src={selectedGiftPackaging.image}
+                          alt={selectedGiftPackaging.name}
+                          className="w-8 h-8 rounded object-cover border border-[#3b2e1b] shrink-0"
+                        />
+                      )}
+                      <p className="text-neutral-300 text-[11px]">
+                        Packaging: <strong className="text-white">{selectedGiftPackaging.name}</strong>
+                        {hideGiftPrice ? ' • Hide Price Slip' : ''}
+                      </p>
+                    </div>
+                  )}
+                  {giftMessage.trim() && (
+                    <p className="text-[#F4E0A5] text-[11px] break-words">
+                      Gift Card: "{giftMessage.trim()}"
+                    </p>
+                  )}
                   {paymentReference && (
                     <p className="text-neutral-400 font-mono text-[11px]">
                       Ref: {paymentReference}
@@ -1210,8 +1592,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     <span className="font-mono">- {formatPKR(discount)}</span>
                   </div>
                 )}
+                {selectedGiftPackaging && (
+                  <div className="flex justify-between text-neutral-300">
+                    <span>Gift Packaging ({selectedGiftPackaging.name})</span>
+                    <span className="font-mono text-white">
+                      {giftPackagingFee === 0 ? 'Complimentary' : formatPKR(giftPackagingFee)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between text-neutral-300">
-                  <span>Shipping & Delivery ({city})</span>
+                  <span>Shipping & Delivery ({resolvedCity})</span>
                   <span className="font-mono text-white">
                     {activeShippingCost === 0 ? 'Free Shipping' : formatPKR(activeShippingCost)}
                   </span>
@@ -1326,10 +1716,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <img
-                          src={
-                            it.image ||
-                            'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=400&q=80'
-                          }
+                          src={it.image || '/hero-steel.jpg'}
                           alt={it.name}
                           className="w-12 h-12 object-cover rounded-md border border-[#3b2e1b] shrink-0"
                         />
@@ -1339,9 +1726,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           </p>
                           <p className="text-[10px] text-neutral-400 mt-0.5">
                             Qty: <strong className="text-neutral-200">{it.quantity}</strong>
+                            {it.selectedColor ? ` • Color: ${it.selectedColor}` : ''}
                             {it.selectedSize ? ` • Size: ${it.selectedSize}` : ''}
                             {it.sku ? ` • SKU: ${it.sku}` : ''}
                           </p>
+                          {it.customNote && (
+                            <p className="text-[10px] text-[#F4E0A5] mt-0.5 break-words">
+                              Custom: "{it.customNote}"
+                            </p>
+                          )}
                         </div>
                       </div>
                       <span className="text-xs font-mono font-bold text-[#D6B16D] shrink-0">
@@ -1350,6 +1743,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </div>
                   ))}
                 </div>
+                {completedOrder.giftPackagingName && (
+                  <div className="pt-2 border-t border-[#261d12] flex items-center justify-between gap-2 text-[11px]">
+                    <span className="text-neutral-300">
+                      Gift Packaging: <strong className="text-white">{completedOrder.giftPackagingName}</strong>
+                      {completedOrder.giftMessage ? ` • Card: "${completedOrder.giftMessage}"` : ''}
+                    </span>
+                    <span className="font-mono text-[#D6B16D] shrink-0">
+                      {(completedOrder.giftPackagingFee || 0) === 0
+                        ? 'Complimentary'
+                        : formatPKR(completedOrder.giftPackagingFee || 0)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* INSTANT WHATSAPP ORDER DISPATCH BANNER */}
@@ -1460,16 +1866,44 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     }
                   }
                   if (step === 2) {
-                    if (!address.trim() || address.trim().length < 5) {
-                      setValidationError('Please enter your complete delivery street address.');
+                    const cityCheck = validatePakistanCity(resolvedCity);
+                    if (!cityCheck.valid) {
+                      setValidationError(cityCheck.reason || 'Please enter a valid Pakistani city.');
+                      return;
+                    }
+                    const addrCheck = validatePakistanAddress(address);
+                    if (!addrCheck.valid) {
+                      setValidationError(addrCheck.reason || 'Please enter a complete delivery street address.');
+                      return;
+                    }
+                    const postalCheck = validatePakistanPostalCode(postalCode);
+                    if (!postalCheck.valid) {
+                      setValidationError(postalCheck.reason || 'Please enter a valid 5-digit postal code.');
                       return;
                     }
                   }
-                  if (step === 3 && paymentMethod === 'online_card' && !onlineCardConfigured) {
-                    setValidationError(
-                      'Online card gateway is not yet active. Please choose Easypaisa, JazzCash, Bank Transfer, or Cash on Delivery.'
-                    );
-                    return;
+                  if (step === 3) {
+                    if (paymentMethod === 'online_card' && !onlineCardConfigured) {
+                      setValidationError(
+                        'Online card gateway is not yet active. Please choose Easypaisa, JazzCash, Bank Transfer, or Cash on Delivery.'
+                      );
+                      return;
+                    }
+                    if (['easypaisa', 'jazzcash', 'bank_transfer'].includes(paymentMethod)) {
+                      const refCheck = validatePaymentReference(paymentReference);
+                      if (!refCheck.valid) {
+                        setValidationError(
+                          refCheck.reason || 'Please enter your Transaction ID / TRX Reference.'
+                        );
+                        return;
+                      }
+                      if (!paymentProofUrl || !paymentProofUrl.startsWith('data:image/')) {
+                        setValidationError(
+                          'Please upload your Easypaisa / JazzCash / Bank payment receipt screenshot before continuing.'
+                        );
+                        return;
+                      }
+                    }
                   }
                   setStep((s) => (s + 1) as any);
                 }}
@@ -1626,10 +2060,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     className="flex items-start gap-3 p-3 rounded-xl bg-neutral-50 border border-neutral-200"
                   >
                     <img
-                      src={
-                        item.image ||
-                        'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=200&q=80'
-                      }
+                      src={item.image || '/hero-steel.jpg'}
                       alt={item.name}
                       className="w-12 h-12 object-cover rounded border border-neutral-300 shrink-0"
                     />
@@ -1637,8 +2068,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <p className="font-semibold text-neutral-900 text-xs leading-snug">{item.name}</p>
                       <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-neutral-500">
                         <span className="font-mono">SKU: {item.sku || 'ZN-STEEL'}</span>
+                        {item.selectedColor && <span className="text-[#8e6720] font-semibold">• Color: {item.selectedColor}</span>}
                         {item.selectedSize && <span>• Size: {item.selectedSize}</span>}
                       </div>
+                      {item.customNote && (
+                        <p className="text-[10px] text-amber-800 font-medium break-words">
+                          Custom: "{item.customNote}"
+                        </p>
+                      )}
                       <div className="flex items-center justify-between pt-1 text-xs">
                         <span className="font-mono text-neutral-600">
                           {item.quantity} × ₨ {item.price.toLocaleString()}
@@ -1670,19 +2107,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <tr key={idx} className="py-2">
                         <td className="py-2.5 pl-1 pr-2">
                           <img
-                            src={
-                              item.image ||
-                              'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=200&q=80'
-                            }
+                            src={item.image || '/hero-steel.jpg'}
                             alt={item.name}
                             className="w-11 h-11 object-cover rounded border border-neutral-300 shadow-sm"
                           />
                         </td>
                         <td className="py-2.5 pr-2 font-medium text-neutral-900">
                           {item.name}
-                          {item.selectedSize && (
+                          {(item.selectedColor || item.selectedSize) && (
                             <span className="text-[10px] text-neutral-500 block">
-                              Size: {item.selectedSize}
+                              {item.selectedColor ? `Color: ${item.selectedColor}` : ''}
+                              {item.selectedColor && item.selectedSize ? ' • ' : ''}
+                              {item.selectedSize ? `Size: ${item.selectedSize}` : ''}
+                            </span>
+                          )}
+                          {item.customNote && (
+                            <span className="text-[10px] text-amber-800 block">
+                              Custom: "{item.customNote}"
                             </span>
                           )}
                         </td>
@@ -1704,6 +2145,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </table>
               </div>
 
+              {completedOrder.giftMessage && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-neutral-800">
+                  <strong className="text-amber-900">Gift Card Message:</strong> "{completedOrder.giftMessage}"
+                  {completedOrder.hideGiftPrice ? ' • (Hide price on parcel slip requested)' : ''}
+                </div>
+              )}
+
               {/* Calculation Totals */}
               <div className="pt-3 border-t-2 border-neutral-300 flex justify-end">
                 <div className="w-full sm:w-64 space-y-1.5 text-xs">
@@ -1716,6 +2164,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       <span>Discount</span>
                       <span className="font-mono">
                         - ₨ {completedOrder.discount.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  {completedOrder.giftPackagingName && (
+                    <div className="flex justify-between text-neutral-600 gap-2">
+                      <span className="truncate">Gift Packaging ({completedOrder.giftPackagingName})</span>
+                      <span className="font-mono shrink-0">
+                        {(completedOrder.giftPackagingFee || 0) === 0
+                          ? 'Free'
+                          : `₨ ${(completedOrder.giftPackagingFee || 0).toLocaleString()}`}
                       </span>
                     </div>
                   )}
@@ -1752,6 +2210,58 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span className="text-[8px] text-amber-700">Official Computerized Invoice</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gift Box Photo Preview Lightbox */}
+      {previewBox && previewBox.image && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPreviewBox(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-[#100d08] border border-[#3b2e1b] overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative bg-black">
+              <img
+                src={previewBox.image}
+                alt={previewBox.name}
+                className="w-full max-h-[60vh] object-contain"
+              />
+              <button
+                type="button"
+                onClick={() => setPreviewBox(null)}
+                aria-label="Close Box Preview"
+                className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-black/80 text-white hover:text-[#D6B16D] flex items-center justify-center cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h4 className="text-sm font-serif font-semibold text-white">{previewBox.name}</h4>
+                  {previewBox.description && (
+                    <p className="text-xs text-neutral-400 mt-0.5">{previewBox.description}</p>
+                  )}
+                </div>
+                <span className="text-xs font-mono font-bold text-[#D6B16D] shrink-0">
+                  {previewBox.price <= 0 ? 'Free' : `+ ${formatPKR(previewBox.price)}`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedGiftPackagingId(previewBox.id);
+                  setPreviewBox(null);
+                }}
+                className="w-full py-2.5 rounded-lg bg-[#D6B16D] text-black text-xs font-bold uppercase tracking-wider hover:bg-[#F4E0A5] transition-colors cursor-pointer"
+              >
+                Select This Box ({previewBox.price <= 0 ? 'Free' : `+ ${formatPKR(previewBox.price)}`})
+              </button>
             </div>
           </div>
         </div>

@@ -64,9 +64,10 @@ service cloud.firestore {
     function isValidProduct(data) {
       return data.keys().hasAll(['id', 'name', 'category', 'price', 'stock']) &&
              data.keys().hasOnly([
-               'id', 'name', 'sku', 'category', 'price', 'salePrice', 'images',
+               'id', 'name', 'sku', 'category', 'price', 'salePrice', 'images', 'imageColors',
                'description', 'material', 'waterproofGrade', 'customizationNotice',
-               'goldPurity', 'weightGrams', 'diamondDetails', 'ringSizes',
+               'allowCustomization', 'customizationLabel', 'customizationPlaceholder', 'customizationFee',
+               'goldPurity', 'weightGrams', 'diamondDetails', 'ringSizes', 'sizeOptions',
                'stock', 'isFeatured', 'isNewArrival', 'rating', 'reviewsCount',
                'createdAt', 'updatedAt'
              ]) &&
@@ -78,14 +79,20 @@ service cloud.firestore {
              (!('salePrice' in data) || (data.salePrice is number && data.salePrice >= 0)) &&
              (!('sku' in data) || (data.sku is string && data.sku.size() <= 64)) &&
              (!('images' in data) || (data.images is list && data.images.size() >= 1 && data.images.size() <= 15)) &&
+             (!('imageColors' in data) || (data.imageColors is list && data.imageColors.size() <= 15 && (data.imageColors.size() == 0 || data.imageColors[0] is string))) &&
              (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
              (!('material' in data) || (data.material is string && data.material.size() <= 200)) &&
              (!('waterproofGrade' in data) || (data.waterproofGrade is string && data.waterproofGrade.size() <= 128)) &&
              (!('customizationNotice' in data) || (data.customizationNotice is string && data.customizationNotice.size() <= 300)) &&
+             (!('allowCustomization' in data) || data.allowCustomization is bool) &&
+             (!('customizationLabel' in data) || (data.customizationLabel is string && data.customizationLabel.size() <= 128)) &&
+             (!('customizationPlaceholder' in data) || (data.customizationPlaceholder is string && data.customizationPlaceholder.size() <= 200)) &&
+             (!('customizationFee' in data) || (data.customizationFee is number && data.customizationFee >= 0)) &&
              (!('goldPurity' in data) || (data.goldPurity is string && data.goldPurity.size() <= 128)) &&
              (!('diamondDetails' in data) || (data.diamondDetails is string && data.diamondDetails.size() <= 300)) &&
              (!('weightGrams' in data) || data.weightGrams is number) &&
              (!('ringSizes' in data) || (data.ringSizes is list && data.ringSizes.size() <= 20)) &&
+             (!('sizeOptions' in data) || (data.sizeOptions is list && data.sizeOptions.size() <= 20 && (data.sizeOptions.size() == 0 || data.sizeOptions[0] is string))) &&
              (!('isFeatured' in data) || data.isFeatured is bool) &&
              (!('isNewArrival' in data) || data.isNewArrival is bool) &&
              (!('rating' in data) || (data.rating is number && data.rating >= 0 && data.rating <= 5)) &&
@@ -115,7 +122,9 @@ service cloud.firestore {
              data.keys().hasOnly([
                'id', 'orderNumber', 'userId', 'customerName', 'customerEmail',
                'customerPhone', 'shippingAddress', 'city', 'items',
-               'subtotal', 'shippingCost', 'discount', 'appliedPromo', 'total',
+               'subtotal', 'shippingCost', 'discount', 'appliedPromo',
+               'giftPackagingId', 'giftPackagingName', 'giftPackagingFee', 'giftMessage', 'hideGiftPrice',
+               'total',
                'paymentMethod', 'paymentStatus', 'paymentReference', 'paymentProofUrl',
                'paymentVerificationHistory', 'orderStatus', 'trackingNumber',
                'notes', 'idempotencyKey', 'stockRestored', 'createdAt', 'updatedAt'
@@ -138,6 +147,11 @@ service cloud.firestore {
              data.createdAt is string && data.createdAt.size() <= 64 &&
              (!('customerEmail' in data) || (data.customerEmail is string && data.customerEmail.size() <= 128)) &&
              (!('appliedPromo' in data) || (data.appliedPromo is string && data.appliedPromo.size() <= 64)) &&
+             (!('giftPackagingId' in data) || (data.giftPackagingId is string && data.giftPackagingId.size() <= 64)) &&
+             (!('giftPackagingName' in data) || (data.giftPackagingName is string && data.giftPackagingName.size() <= 128)) &&
+             (!('giftPackagingFee' in data) || (data.giftPackagingFee is number && data.giftPackagingFee >= 0)) &&
+             (!('giftMessage' in data) || (data.giftMessage is string && data.giftMessage.size() <= 200)) &&
+             (!('hideGiftPrice' in data) || data.hideGiftPrice is bool) &&
              (!('paymentReference' in data) || (data.paymentReference is string && data.paymentReference.size() <= 128)) &&
              (!('paymentProofUrl' in data) || (data.paymentProofUrl is string && data.paymentProofUrl.size() <= 400000)) &&
              (!('paymentVerificationHistory' in data) || (data.paymentVerificationHistory is list && data.paymentVerificationHistory.size() <= 50)) &&
