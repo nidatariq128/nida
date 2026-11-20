@@ -506,25 +506,64 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                     </button>
                   </div>
                   {showSizingGuide && (
-                    <div className="p-3 rounded-lg bg-[#141009] border border-[#2f2416] text-[11px] text-neutral-300 space-y-1.5">
-                      <span className="text-[#D6B16D] font-semibold uppercase tracking-wider block text-[10px]">
-                        {product.category.toLowerCase().includes('bangle')
-                          ? 'Pakistan Standard Bangle Size Chart'
-                          : 'US / Pakistan Standard Ring Chart'}
-                      </span>
+                    <div className="p-3.5 rounded-xl bg-[#141009] border border-[#382b18] text-[11px] text-neutral-300 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[#D6B16D] font-semibold uppercase tracking-wider text-[10px]">
+                          {product.category.toLowerCase().includes('bangle')
+                            ? 'Pakistan Standard Bangle Size Chart'
+                            : 'Ring Size & Inner Diameter Guide'}
+                        </span>
+                        <span className="text-[10px] text-neutral-400">Inner Diameter</span>
+                      </div>
+
                       {product.category.toLowerCase().includes('bangle') ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[10px] text-neutral-300">
-                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.2 • Small</div>
-                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.4 • Medium</div>
-                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.6 • Large</div>
-                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">2.8 • XL</div>
-                        </div>
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[10px] text-neutral-200">
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">2.2 · Small</strong>
+                              <span className="text-neutral-400">2.12&Prime; (54 mm)</span>
+                            </div>
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">2.4 · Medium</strong>
+                              <span className="text-neutral-400">2.25&Prime; (57 mm)</span>
+                            </div>
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">2.6 · Large</strong>
+                              <span className="text-neutral-400">2.38&Prime; (60 mm)</span>
+                            </div>
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">2.8 · XL</strong>
+                              <span className="text-neutral-400">2.50&Prime; (63.5 mm)</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-neutral-400 leading-relaxed">
+                            <strong className="text-neutral-200">How to measure:</strong> Apni purani fitting choodi / bangle ke andar ka diameter scale se naapein, ya angutha andar mod kar hath ke sabse chauday hissay ka size dekhein.
+                          </p>
+                        </>
                       ) : (
-                        <div className="grid grid-cols-3 gap-2 font-mono text-[10px] text-neutral-300">
-                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 6 • 16.5 mm</div>
-                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 7 • 17.3 mm</div>
-                          <div className="p-1.5 rounded bg-[#0c0906] border border-[#241b0f]">Size 8 • 18.1 mm</div>
-                        </div>
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-[10px] text-neutral-200">
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">Size 6</strong>
+                              <span className="text-neutral-400">16.5 mm (51.9 mm)</span>
+                            </div>
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">Size 7</strong>
+                              <span className="text-neutral-400">17.3 mm (54.4 mm)</span>
+                            </div>
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">Size 8</strong>
+                              <span className="text-neutral-400">18.1 mm (57.0 mm)</span>
+                            </div>
+                            <div className="p-2 rounded bg-[#0c0906] border border-[#241b0f]">
+                              <strong className="text-[#D6B16D] block">Size 9</strong>
+                              <span className="text-neutral-400">18.9 mm (59.5 mm)</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-neutral-400 leading-relaxed">
+                            <strong className="text-neutral-200">How to measure:</strong> Ungli ke gird kagaz ki patti lapet kar length mm mein naapein, ya apni ring ka andaruni diameter check karein.
+                          </p>
+                        </>
                       )}
                     </div>
                   )}

@@ -1,46 +1,84 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Star, Sparkles, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { Review } from '../../types';
+
+interface TestimonialCard {
+  name: string;
+  location: string;
+  stars: number;
+  title: string;
+  comment: string;
+}
+
+const CURATED_TESTIMONIALS: TestimonialCard[] = [
+  {
+    name: 'Amina Al-Mansoor',
+    location: 'Karachi, Clifton',
+    stars: 5,
+    title: 'The Royal Bridal Bangles set was simply breathtaking',
+    comment:
+      'The 24-piece velvet bangles set with heavy Kundan centerpiece kadas was the talk of my wedding. The antique gold polish and velvet finish felt so luxurious and royal.',
+  },
+  {
+    name: 'Dr. Shahzad Qureshi',
+    location: 'Lahore, DHA Phase 5',
+    stars: 5,
+    title: 'Exquisite chronograph watch and designer handbag',
+    comment:
+      'Purchased the gold chronograph and the quilted handbag for my anniversary. The finish, anti-tarnish stainless steel construction, and luxury velvet packaging were exceptional.',
+  },
+  {
+    name: 'Fatima Z. Bukhari',
+    location: 'Islamabad, F-7/2',
+    stars: 5,
+    title: 'Bridal Bangles & Waterproof Stainless Steel Jewellery',
+    comment:
+      'The kundan bangles were magnificent for the wedding, and the everyday stainless steel clover necklace hasn’t tarnished at all even after weeks of continuous wear. 10/10 service!',
+  },
+];
 
 export const CustomerTestimonials: React.FC = () => {
-  const testimonials = [
-    {
-      name: 'Amina Al-Mansoor',
-      location: 'Karachi, Clifton',
-      role: 'Bridal Client',
-      stars: 5,
-      date: 'February 2026',
-      title: 'The Royal Bridal Bangles set was simply breathtaking',
-      comment:
-        'The 24-piece velvet bangles set with heavy Kundan centerpiece kadas was the talk of my wedding. The antique gold polish and velvet finish felt so luxurious and royal.'
-    },
-    {
-      name: 'Dr. Shahzad Qureshi',
-      location: 'Lahore, DHA Phase 5',
-      role: 'Verified Buyer',
-      stars: 5,
-      date: 'January 2026',
-      title: 'Exquisite chronograph watch and designer handbag',
-      comment:
-        'Purchased the gold chronograph and the quilted handbag for my anniversary. The finish, anti-tarnish stainless steel construction, and luxury velvet packaging were exceptional.'
-    },
-    {
-      name: 'Fatima Z. Bukhari',
-      location: 'Islamabad, F-7/2',
-      role: 'Regular Patron',
-      stars: 5,
-      date: 'February 2026',
-      title: 'Bridal Bangles & Waterproof Stainless Steel Jewellery',
-      comment:
-        'The kundan bangles were magnificent for the wedding, and the everyday stainless steel clover necklace hasn’t tarnished at all even after weeks of continuous wear. 10/10 service!'
-    }
-  ];
-
+  const [testimonials, setTestimonials] = useState<TestimonialCard[]>(CURATED_TESTIMONIALS);
   const [activeSlide, setActiveSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    if (isPaused) return;
+    let active = true;
+    (async () => {
+      try {
+        const q = query(collection(db, 'reviews'), orderBy('createdAt', 'desc'), limit(6));
+        const snap = await getDocs(q);
+        if (!active || snap.empty) return;
+
+        const liveCards: TestimonialCard[] = snap.docs
+          .map((d) => d.data() as Review)
+          .filter((r) => Boolean(r.comment?.trim()) && Boolean(r.userName?.trim()))
+          .map((r) => ({
+            name: r.userName,
+            location: 'Verified Store Customer',
+            stars: Math.max(1, Math.min(5, Math.round(r.rating || 5))),
+            title: r.comment.length > 52 ? `${r.comment.slice(0, 52).trim()}...` : r.comment,
+            comment: r.comment,
+          }));
+
+        if (liveCards.length > 0) {
+          const combined = [...liveCards, ...CURATED_TESTIMONIALS].slice(0, Math.max(3, liveCards.length));
+          setTestimonials(combined.slice(0, 6));
+        }
+      } catch {
+        // Keep curated fallback silently if offline or unindexed
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isPaused || testimonials.length <= 1) return;
     const timer = setInterval(() => {
       setActiveSlide((prev) => (prev + 1) % testimonials.length);
     }, 4500);
@@ -72,15 +110,16 @@ export const CustomerTestimonials: React.FC = () => {
     touchStartRef.current = null;
   };
 
-  const currentReview = testimonials[activeSlide];
+  const safeIndex = activeSlide % testimonials.length;
+  const currentReview = testimonials[safeIndex];
 
   return (
-    <section className="py-14 sm:py-24 px-4 sm:px-6 lg:px-12 bg-[#060606] border-t border-[#1a160e]">
+    <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-12 bg-[#060606] border-t border-[#1a160e]">
       <div className="max-w-7xl mx-auto space-y-8 sm:space-y-12">
         
         {/* Header */}
-        <div className="text-center space-y-3 max-w-xl mx-auto">
-          <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-[#D6B16D] font-medium">
+        <div className="text-center space-y-2.5 max-w-xl mx-auto">
+          <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] text-[#D6B16D] font-medium">
             <Sparkles className="w-3 h-3" />
             <span>Patron Testimonials</span>
           </div>
@@ -88,11 +127,11 @@ export const CustomerTestimonials: React.FC = () => {
             Words From Our <span className="italic font-serif gold-gradient-text">Patrons</span>
           </h2>
           <p className="hidden md:block text-xs sm:text-sm text-neutral-400 font-light">
-            Reflections of trust, timeless elegance, and joy from our distinguished clientele worldwide.
+            Reflections of trust, craftsmanship, and celebration from our valued customers across Pakistan.
           </p>
         </div>
 
-        {/* Mobile Auto-Rotating Single Card Slider (Zero Right-Side Cut-off) */}
+        {/* Mobile Auto-Rotating Single Card Slider */}
         <div
           className="md:hidden space-y-4"
           onTouchStart={handleTouchStart}
@@ -146,7 +185,7 @@ export const CustomerTestimonials: React.FC = () => {
                   onClick={() => setActiveSlide(idx)}
                   aria-label={`Review ${idx + 1}`}
                   className={`h-2 rounded-full transition-all duration-300 ${
-                    idx === activeSlide ? 'w-6 bg-[#D6B16D]' : 'w-2 bg-[#2d2417]'
+                    idx === safeIndex ? 'w-6 bg-[#D6B16D]' : 'w-2 bg-[#2d2417]'
                   }`}
                 />
               ))}
@@ -165,13 +204,12 @@ export const CustomerTestimonials: React.FC = () => {
 
         {/* Desktop 3-Column Grid */}
         <div className="hidden md:grid md:grid-cols-3 gap-8">
-          {testimonials.map((t, index) => (
+          {testimonials.slice(0, 3).map((t, index) => (
             <div
               key={index}
               className="p-8 rounded-xl bg-[#0d0c09] border border-[#2b2417] relative flex flex-col justify-between hover:border-[#D6B16D]/60 transition-all duration-300 shadow-xl"
             >
               <div className="space-y-4">
-                {/* 5 Stars */}
                 <div className="flex items-center gap-1 text-[#D6B16D]">
                   {[...Array(t.stars)].map((_, i) => (
                     <Star key={i} className="w-4 h-4 fill-[#D6B16D]" />

@@ -59,12 +59,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const freeShippingProgress = Math.min(100, (subtotal / freeShippingThreshold) * 100);
   const hasStockIssue = items.some((i) => i.product.stock <= 0 || i.quantity > i.product.stock);
 
-  const handleApplyPromo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!promoInput.trim() || applyingPromo) return;
+  const applySuggestedCode = async (code: string) => {
+    if (applyingPromo) return;
     setApplyingPromo(true);
     try {
-      const res = await applyPromoCode(promoInput);
+      const res = await applyPromoCode(code);
       if (res.success) {
         setPromoMessage({ type: 'success', text: res.message });
         setPromoInput('');
@@ -74,6 +73,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     } finally {
       setApplyingPromo(false);
     }
+  };
+
+  const handleApplyPromo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!promoInput.trim() || applyingPromo) return;
+    await applySuggestedCode(promoInput);
   };
 
   return (
@@ -416,22 +421,53 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <form onSubmit={handleApplyPromo} className="flex items-stretch gap-2 w-full">
-                    <input
-                      type="text"
-                      placeholder="Promo Code (e.g. ZNLUXURY10)"
-                      value={promoInput}
-                      onChange={(e) => setPromoInput(e.target.value)}
-                      className="min-w-0 flex-1 bg-[#141009] border border-[#2d2315] text-xs px-3 py-2 rounded text-white focus:outline-none focus:border-[#D6B16D] placeholder:text-neutral-500 uppercase"
-                    />
-                    <button
-                      type="submit"
-                      disabled={applyingPromo}
-                      className="px-3.5 sm:px-4 min-h-[40px] bg-[#1f190f] border border-[#3d311c] text-[#D6B16D] text-xs font-medium rounded hover:bg-[#D6B16D] hover:text-black transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
-                    >
-                      {applyingPromo ? '...' : 'Apply'}
-                    </button>
-                  </form>
+                  <>
+                    <form onSubmit={handleApplyPromo} className="flex items-stretch gap-2 w-full">
+                      <input
+                        type="text"
+                        placeholder="Promo Code (e.g. ZNLUXURY10)"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value)}
+                        className="min-w-0 flex-1 bg-[#141009] border border-[#2d2315] text-xs px-3 py-2 rounded text-white focus:outline-none focus:border-[#D6B16D] placeholder:text-neutral-500 uppercase"
+                      />
+                      <button
+                        type="submit"
+                        disabled={applyingPromo}
+                        className="px-3.5 sm:px-4 min-h-[40px] bg-[#1f190f] border border-[#3d311c] text-[#D6B16D] text-xs font-medium rounded hover:bg-[#D6B16D] hover:text-black transition-colors disabled:opacity-50 shrink-0 cursor-pointer"
+                      >
+                        {applyingPromo ? '...' : 'Apply'}
+                      </button>
+                    </form>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10px]">
+                      <span className="text-neutral-400">Tap to apply:</span>
+                      <button
+                        type="button"
+                        disabled={applyingPromo}
+                        onClick={() => void applySuggestedCode('ZNLUXURY10')}
+                        className="px-2 py-0.5 rounded bg-[#18130a] border border-[#382b18] hover:border-[#D6B16D] text-[#D6B16D] font-mono cursor-pointer transition-colors"
+                      >
+                        ZNLUXURY10 (10% Off)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={applyingPromo}
+                        onClick={() => void applySuggestedCode('WELCOMEZN')}
+                        className="px-2 py-0.5 rounded bg-[#18130a] border border-[#382b18] hover:border-[#D6B16D] text-neutral-300 hover:text-[#D6B16D] font-mono cursor-pointer transition-colors"
+                      >
+                        WELCOMEZN (-₨ 500)
+                      </button>
+                      {subtotal >= 25000 && (
+                        <button
+                          type="button"
+                          disabled={applyingPromo}
+                          onClick={() => void applySuggestedCode('ROYAL50K')}
+                          className="px-2 py-0.5 rounded bg-[#18130a] border border-[#382b18] hover:border-[#D6B16D] text-[#F4E0A5] font-mono cursor-pointer transition-colors"
+                        >
+                          ROYAL50K (-₨ 5,000)
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
                 {promoMessage && (
                   <div className={`text-[11px] flex items-center gap-1 ${

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#261d10"/>
+      <stop offset="65%" stop-color="#110d07"/>
+      <stop offset="100%" stop-color="#070604"/>
+    </radialGradient>
+    <linearGradient id="velvetBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#24201b"/>
+      <stop offset="50%" stop-color="#13100d"/>
+      <stop offset="100%" stop-color="#090705"/>
+    </linearGradient>
+    <linearGradient id="goldFoil" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F6E2A8"/>
+      <stop offset="50%" stop-color="#D6B16D"/>
+      <stop offset="100%" stop-color="#9A7228"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="400" height="400" fill="url(#bgGlow)"/>
+  <ellipse cx="200" cy="332" rx="108" ry="18" fill="#000000" opacity="0.65"/>
+
+  <!-- Pouch Top Pleated Ruffles -->
+  <path d="M132 108 C148 88, 172 90, 184 106 C194 92, 206 92, 216 106 C228 90, 252 88, 268 108 L256 146 L144 146 Z" fill="url(#velvetBody)" stroke="#3c2f1b" stroke-width="1.5"/>
+
+  <!-- Pouch Main Body -->
+  <path d="M144 144 C112 184, 96 244, 108 296 C116 322, 152 332, 200 332 C248 332, 284 322, 292 296 C304 244, 288 184, 256 144 Z" fill="url(#velvetBody)" stroke="#4a3a22" stroke-width="1.5"/>
+
+  <!-- Subtle Vertical Velvet Folds -->
+  <path d="M158 152 C145 204, 144 258, 154 316" fill="none" stroke="#2d2417" stroke-width="2" opacity="0.6"/>
+  <path d="M242 152 C255 204, 256 258, 246 316" fill="none" stroke="#2d2417" stroke-width="2" opacity="0.6"/>
+
+  <!-- Drawstring Gold Cords -->
+  <path d="M140 144 Q200 156 260 144" fill="none" stroke="url(#goldFoil)" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M172 148 C154 176, 140 198, 134 220" fill="none" stroke="url(#goldFoil)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M228 148 C246 176, 260 198, 266 220" fill="none" stroke="url(#goldFoil)" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="134" cy="222" r="5" fill="url(#goldFoil)"/>
+  <circle cx="266" cy="222" r="5" fill="url(#goldFoil)"/>
+
+  <!-- Gold Embossed Crest Frame & ZN Emblem -->
+  <rect x="162" y="204" width="76" height="58" rx="6" fill="none" stroke="url(#goldFoil)" stroke-width="1.5" opacity="0.9"/>
+  <rect x="167" y="209" width="66" height="48" rx="4" fill="none" stroke="url(#goldFoil)" stroke-width="0.6" opacity="0.55"/>
+  <text x="200" y="236" text-anchor="middle" font-family="Georgia, serif" font-size="22" font-weight="bold" letter-spacing="3" fill="url(#goldFoil)">ZN</text>
+  <text x="200" y="250" text-anchor="middle" font-family="Georgia, serif" font-size="7" letter-spacing="2.5" fill="#D6B16D" opacity="0.9">JEWELERS</text>
+</svg>

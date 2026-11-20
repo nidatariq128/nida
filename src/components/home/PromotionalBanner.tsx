@@ -44,8 +44,8 @@ export const PromotionalBanner: React.FC<PromotionalBannerProps> = ({ onNavigate
               <span>Explore Bridal Bangles</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </button>
-            <span className="text-xs text-neutral-400 italic">
-              *Delivery across all Pakistan
+            <span className="text-xs text-neutral-300">
+              Use code <strong className="font-mono text-[#D6B16D]">ZNLUXURY10</strong> for 10% Off at checkout
             </span>
           </div>
         </div>

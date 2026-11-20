@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <radialGradient id="bgHamper" cx="50%" cy="40%" r="62%">
+      <stop offset="0%" stop-color="#322514"/>
+      <stop offset="65%" stop-color="#120d08"/>
+      <stop offset="100%" stop-color="#070604"/>
+    </radialGradient>
+    <linearGradient id="hamperOuter" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#272017"/>
+      <stop offset="100%" stop-color="#0e0b08"/>
+    </linearGradient>
+    <linearGradient id="silkLining" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F6E5B5"/>
+      <stop offset="50%" stop-color="#DFC184"/>
+      <stop offset="100%" stop-color="#B08A42"/>
+    </linearGradient>
+    <linearGradient id="goldBar" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9E7426"/>
+      <stop offset="50%" stop-color="#F5E2AA"/>
+      <stop offset="100%" stop-color="#9E7426"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="400" height="400" fill="url(#bgHamper)"/>
+  <ellipse cx="200" cy="336" rx="146" ry="22" fill="#000000" opacity="0.7"/>
+
+  <!-- Raised Open Lid Back -->
+  <path d="M74 166 L94 74 C96 66, 102 62, 110 62 L290 62 C298 62, 304 66, 306 74 L326 166 Z" fill="url(#hamperOuter)" stroke="#5c4727" stroke-width="1.5"/>
+  <!-- Inner Lid Gold Piping -->
+  <path d="M88 158 L104 78 L296 78 L312 158 Z" fill="#17120c" stroke="url(#goldBar)" stroke-width="1" opacity="0.85"/>
+  <text x="200" y="114" text-anchor="middle" font-family="Georgia, serif" font-size="22" font-weight="bold" letter-spacing="4" fill="url(#goldBar)">ZN</text>
+  <text x="200" y="132" text-anchor="middle" font-family="Georgia, serif" font-size="7.5" letter-spacing="3" fill="#D6B16D">BRIDAL HAMPER</text>
+
+  <!-- Silk Tissue Lining -->
+  <path d="M72 172 C108 152, 152 162, 200 156 C248 162, 292 152, 328 172 L316 200 L84 200 Z" fill="url(#silkLining)" opacity="0.9"/>
+
+  <!-- Mini Velvet Ring & Bangle Inserts Inside -->
+  <rect x="108" y="176" width="56" height="28" rx="4" fill="#14100b" stroke="#D6B16D" stroke-width="1"/>
+  <circle cx="136" cy="186" r="8" fill="none" stroke="#F5E2AA" stroke-width="2.5"/>
+  <rect x="234" y="170" width="62" height="32" rx="4" fill="#110d08" stroke="url(#goldBar)" stroke-width="1"/>
+  <text x="265" y="189" text-anchor="middle" font-family="Georgia, serif" font-size="7" letter-spacing="1.2" fill="#F5E2AA">GREETING</text>
+
+  <!-- Keepsake Base -->
+  <rect x="66" y="196" width="268" height="122" rx="9" fill="url(#hamperOuter)" stroke="#5c4727" stroke-width="1.6"/>
+  <rect x="66" y="196" width="268" height="14" fill="url(#goldBar)" opacity="0.25"/>
+
+  <!-- Gold Ribbon & Bow on Front -->
+  <rect x="186" y="196" width="28" height="122" fill="url(#silkLining)"/>
+  <path d="M200 220 C176 196, 144 202, 150 222 C154 234, 180 228, 200 220 Z" fill="url(#silkLining)" stroke="#8A631D" stroke-width="1"/>
+  <path d="M200 220 C224 196, 256 202, 250 222 C246 234, 220 228, 200 220 Z" fill="url(#silkLining)" stroke="#8A631D" stroke-width="1"/>
+  <circle cx="200" cy="222" r="8.5" fill="#F6E5B5" stroke="#8A631D" stroke-width="1.2"/>
+</svg>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, ShoppingBag, Eye, Sparkles, Check } from 'lucide-react';
+import { Heart, ShoppingBag, Eye, Check } from 'lucide-react';
 import { Product } from '../../types';
 import { formatPKR } from '../../lib/formatters';
 import { useCart } from '../../context/CartContext';
@@ -26,7 +26,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (product.stock <= 0) return;
-    const defaultSize = product.ringSizes ? product.ringSizes[0] : undefined;
+    const defaultSize =
+      product.sizeOptions?.[0] ||
+      product.ringSizes?.[0] ||
+      undefined;
     const defaultColor =
       product.imageColors?.[0]?.trim() ||
       (product.images && product.images.length > 1 ? 'Color / Style 1' : undefined);
@@ -41,24 +44,53 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     toggleWishlist(product.id);
   };
 
-  const isSale = product.salePrice && product.salePrice < product.price;
-  const discountPercent = isSale 
-    ? Math.round(((product.price - product.salePrice!) / product.price) * 100) 
+  const isSale = Boolean(product.salePrice && product.salePrice < product.price);
+  const discountPercent = isSale
+    ? Math.round(((product.price - product.salePrice!) / product.price) * 100)
     : 0;
+  const isOutOfStock = product.stock <= 0;
+
+  // Single disciplined corner badge (priority: Sold Out > Sale % > Customizable > New)
+  const cornerTag: { label: string; className: string } | null = isOutOfStock
+    ? {
+        label: 'Sold Out',
+        className: 'bg-black/85 text-neutral-300 border border-neutral-700',
+      }
+    : isSale && !hideDiscountBadge && discountPercent > 0
+    ? {
+        label: `-${discountPercent}% OFF`,
+        className: 'bg-[#D6B16D] text-black font-bold',
+      }
+    : product.allowCustomization
+    ? {
+        label: 'Customizable',
+        className: 'bg-black/80 text-[#D6B16D] border border-[#D6B16D]/50',
+      }
+    : product.isNewArrival && !hideNewBadge
+    ? {
+        label: 'New',
+        className: 'bg-black/80 text-white border border-white/25',
+      }
+    : null;
 
   return (
     <div 
       onClick={() => onQuickView(product)}
       className="group relative bg-[#0e0c08] rounded-xl overflow-hidden border border-[#231d14] hover:border-[#D6B16D]/70 transition-all duration-300 flex flex-col justify-between cursor-pointer shadow-lg hover:shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
     >
-      {/* 1. Image Area & Floating Badges */}
+      {/* 1. Image Area & Single Corner Tag */}
       <div className="relative aspect-[4/4.5] w-full overflow-hidden bg-[#14110a]">
         
         {/* Main Product Image */}
         <img
           src={product.images[0] || '/hero-steel.jpg'}
           alt={product.name}
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 brightness-95 group-hover:brightness-100"
+          referrerPolicy="no-referrer"
+          className={`w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ${
+            isOutOfStock
+              ? 'opacity-55 grayscale-[35%]'
+              : 'brightness-95 group-hover:brightness-100'
+          }`}
           loading="lazy"
           onError={(e) => {
             const img = e.currentTarget;
@@ -70,10 +102,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         />
 
         {/* Alternate image on hover if available */}
-        {product.images[1] && (
+        {product.images[1] && !isOutOfStock && (
           <img
             src={product.images[1]}
             alt={`${product.name} angle`}
+            referrerPolicy="no-referrer"
             className="absolute inset-0 w-full h-full object-cover object-center opacity-0 group-hover:opacity-100 transition-opacity duration-500 brightness-95"
             loading="lazy"
             onError={(e) => {
@@ -86,9 +119,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           />
         )}
 
-        {/* Seamless Luxury Edge Blending: Dark Bottom Fade & Soft Inner Vignette */}
+        {/* Seamless Luxury Edge Blending */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0e0c08] via-transparent to-black/25 pointer-events-none" />
         <div className="absolute inset-0 ring-1 ring-inset ring-[#D6B16D]/15 pointer-events-none rounded-t-xl" />
+
+        {/* Single Top-Left Corner Tag */}
+        {cornerTag && (
+          <span
+            className={`absolute top-2 left-2 sm:top-3 sm:left-3 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[9px] sm:text-[10px] uppercase tracking-wider backdrop-blur-sm z-10 whitespace-nowrap ${cornerTag.className}`}
+          >
+            {cornerTag.label}
+          </span>
+        )}
 
         {/* Top Right Wishlist Button */}
         <button
@@ -119,9 +161,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="p-3 sm:p-5 flex flex-col justify-between flex-1 space-y-2 sm:space-y-3">
         
         <div>
-          <div className="flex items-center justify-between gap-1 text-[9px] sm:text-[11px] text-[#D6B16D]/80 uppercase tracking-wider sm:tracking-widest">
+          <div className="flex items-center justify-between gap-1 text-[9px] sm:text-[11px] text-[#D6B16D]/85 uppercase tracking-wider sm:tracking-widest">
             <span className="truncate">{product.category}</span>
-            <span className="hidden sm:inline font-mono text-neutral-400 shrink-0">{product.sku}</span>
+            <span className="font-mono text-[#D6B16D] shrink-0">
+              ★ {(product.rating || 5.0).toFixed(1)}
+            </span>
           </div>
 
           <h3 className="text-xs sm:text-base font-serif font-medium text-white group-hover:text-[#D6B16D] transition-colors line-clamp-1 mt-1">
@@ -151,32 +195,34 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div className="flex flex-col min-w-0">
             {isSale ? (
               <div className="flex flex-wrap items-baseline gap-1 sm:gap-2">
-                <span className="text-xs sm:text-base font-mono font-semibold text-white">
+                <span className="text-xs sm:text-base font-mono tabular-nums font-semibold text-white">
                   {formatPKR(product.salePrice!)}
                 </span>
-                <span className="text-[10px] sm:text-[11px] font-mono text-neutral-400 line-through">
+                <span className="text-[10px] sm:text-[11px] font-mono tabular-nums text-neutral-400 line-through">
                   {formatPKR(product.price)}
                 </span>
               </div>
             ) : (
-              <span className="text-xs sm:text-base font-mono font-semibold text-white">
+              <span className="text-xs sm:text-base font-mono tabular-nums font-semibold text-white">
                 {formatPKR(product.price)}
               </span>
             )}
-            <span className="hidden sm:block text-[10px] text-neutral-400">All Taxes Included</span>
+            <span className="hidden sm:block text-[10px] text-neutral-400">
+              {isOutOfStock ? 'Currently Unavailable' : 'All Taxes Included'}
+            </span>
           </div>
 
           <button
             onClick={handleAddToCart}
-            disabled={product.stock <= 0}
+            disabled={isOutOfStock}
             className={`p-2 sm:p-2.5 rounded-lg border transition-all duration-200 flex items-center justify-center shrink-0 ${
-              product.stock <= 0
+              isOutOfStock
                 ? 'bg-neutral-900 border-neutral-800 text-neutral-600 cursor-not-allowed'
                 : addedAnimation
                 ? 'bg-emerald-600 text-white border-emerald-500 scale-95'
                 : 'bg-[#18140e] border-[#3b311e] text-[#D6B16D] hover:bg-[#D6B16D] hover:text-black hover:border-[#D6B16D]'
             }`}
-            title="Add To Bag"
+            title={isOutOfStock ? 'Sold Out' : 'Add To Bag'}
           >
             {addedAnimation ? (
               <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

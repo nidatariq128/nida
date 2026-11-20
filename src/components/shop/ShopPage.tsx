@@ -31,6 +31,7 @@ export const ShopPage: React.FC<ShopPageProps> = ({
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'newest'>(
     initialFilter === 'new' ? 'newest' : 'price-asc'
   );
+  const [quickFilter, setQuickFilter] = useState<'all' | 'sale' | 'customizable' | 'in-stock'>('all');
 
   // Sync when initialCategory or initialFilter prop changes
   React.useEffect(() => {
@@ -128,6 +129,17 @@ export const ShopPage: React.FC<ShopPageProps> = ({
           return false;
         }
 
+        // Smart availability & feature filters (1-click switching)
+        if (quickFilter === 'sale' && !(p.salePrice && p.salePrice < p.price)) {
+          return false;
+        }
+        if (quickFilter === 'customizable' && !p.allowCustomization) {
+          return false;
+        }
+        if (quickFilter === 'in-stock' && p.stock <= 0) {
+          return false;
+        }
+
         return true;
       })
       .sort((a, b) => {
@@ -142,13 +154,19 @@ export const ShopPage: React.FC<ShopPageProps> = ({
         }
         return priceA - priceB;
       });
-  }, [products, activeCategory, searchQuery, sortBy, initialFilter]);
+  }, [products, activeCategory, searchQuery, sortBy, initialFilter, quickFilter]);
+
+  const hasActiveFilters =
+    Boolean(searchQuery) ||
+    quickFilter !== 'all' ||
+    activeCategory !== 'all';
 
   const handleResetFilters = () => {
     setActiveCategory('all');
     setSelectedCategory(null);
     setSearchQuery('');
     setSortBy('price-asc');
+    setQuickFilter('all');
   };
 
   return (
@@ -245,14 +263,50 @@ export const ShopPage: React.FC<ShopPageProps> = ({
             )}
           </div>
 
-          {/* Just Price Filter Dropdown (English Only) */}
-          <div className="flex items-center gap-2.5">
+          {/* Smart Quick Filters & Price Sort */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setQuickFilter((prev) => (prev === 'sale' ? 'all' : 'sale'))}
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap ${
+                quickFilter === 'sale'
+                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
+                  : 'bg-[#141009] text-neutral-300 border-[#332718] hover:border-[#D6B16D]'
+              }`}
+            >
+              On Sale
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setQuickFilter((prev) => (prev === 'customizable' ? 'all' : 'customizable'))}
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap ${
+                quickFilter === 'customizable'
+                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
+                  : 'bg-[#141009] text-neutral-300 border-[#332718] hover:border-[#D6B16D]'
+              }`}
+            >
+              Customizable
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setQuickFilter((prev) => (prev === 'in-stock' ? 'all' : 'in-stock'))}
+              className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap ${
+                quickFilter === 'in-stock'
+                  ? 'bg-[#D6B16D] text-black border-[#D6B16D] font-semibold'
+                  : 'bg-[#141009] text-neutral-300 border-[#332718] hover:border-[#D6B16D]'
+              }`}
+            >
+              In Stock
+            </button>
+
             <div className="flex items-center gap-2 bg-[#141009] border border-[#3b2e1b] rounded-lg px-3 py-2 text-xs text-white shadow-sm">
               <ArrowUpDown className="w-3.5 h-3.5 text-[#D6B16D] shrink-0" />
-              <span className="text-neutral-300 text-xs font-medium">Price:</span>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
+                aria-label="Sort products"
                 className="bg-transparent text-xs text-[#D6B16D] font-semibold focus:outline-none cursor-pointer pr-1"
               >
                 <option value="price-asc" className="bg-[#141009] text-white">Price: Low to High</option>
@@ -261,7 +315,7 @@ export const ShopPage: React.FC<ShopPageProps> = ({
               </select>
             </div>
 
-            {searchQuery && (
+            {hasActiveFilters && (
               <button
                 type="button"
                 onClick={handleResetFilters}

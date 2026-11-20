@@ -102,6 +102,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   const [editColSaving, setEditColSaving] = useState(false);
   const [editColError, setEditColError] = useState<string | null>(null);
 
+  // Bulk Sale % Bar State
+  const [bulkSalePercent, setBulkSalePercent] = useState<string>('15');
+  const [applyingBulkSale, setApplyingBulkSale] = useState(false);
+
   // In-App Deletion Modal State (avoids blocked window.confirm in iframes)
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
     type: 'product' | 'collection';
@@ -604,8 +608,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
         reviewsCount: existingProd?.reviewsCount || 1,
       };
 
-      if (prodSalePrice && Number(prodSalePrice) > 0) {
+      if (prodSalePrice && Number(prodSalePrice) > 0 && Number(prodSalePrice) < numericPrice) {
         dataPayload.salePrice = Number(prodSalePrice);
+      } else if (editingProductId) {
+        dataPayload.salePrice = undefined;
       }
 
       if (prodDiamondDetails && prodDiamondDetails.trim()) {
@@ -1671,6 +1677,107 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     </button>
                   </div>
 
+                  {/* Quick Bulk Sale Percentage Controller */}
+                  {filteredProducts.length > 0 && (
+                    <div className="p-3.5 rounded-xl bg-[#0f0c08] border border-[#2b2214] flex flex-wrap items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-semibold text-[#D6B16D] block">
+                          Set Sale Percentage ({prodCategoryFilter === 'ALL' ? 'All Shown Products' : prodCategoryFilter})
+                        </span>
+                        <span className="text-[11px] text-neutral-400 block">
+                          Apply a % discount across all {filteredProducts.length} shown items in 1 click
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {[10, 15, 20, 25, 30].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            disabled={applyingBulkSale}
+                            onClick={async () => {
+                              setBulkSalePercent(String(pct));
+                              setApplyingBulkSale(true);
+                              try {
+                                await Promise.all(
+                                  filteredProducts.map((item) =>
+                                    updateProduct(item.id, {
+                                      salePrice: Math.max(1, Math.round(item.price * (1 - pct / 100))),
+                                    })
+                                  )
+                                );
+                                setProductSavedSuccess(`${pct}% Sale applied to ${filteredProducts.length} product(s)!`);
+                              } finally {
+                                setApplyingBulkSale(false);
+                              }
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-[#17120b] border border-[#3a2d18] hover:border-[#D6B16D] text-[11px] font-mono text-[#D6B16D] cursor-pointer transition-colors disabled:opacity-50"
+                          >
+                            {pct}% Off
+                          </button>
+                        ))}
+
+                        <div className="flex items-center gap-1 bg-[#141009] border border-[#3b2e1b] rounded-lg px-2 py-1">
+                          <input
+                            type="number"
+                            min={1}
+                            max={90}
+                            value={bulkSalePercent}
+                            onChange={(e) => setBulkSalePercent(e.target.value)}
+                            className="w-11 bg-transparent text-xs font-mono text-white text-center focus:outline-none"
+                            aria-label="Custom discount percentage"
+                          />
+                          <span className="text-[11px] text-neutral-400">%</span>
+                          <button
+                            type="button"
+                            disabled={applyingBulkSale || !(Number(bulkSalePercent) > 0 && Number(bulkSalePercent) < 95)}
+                            onClick={async () => {
+                              const pct = Number(bulkSalePercent);
+                              if (!(pct > 0 && pct < 95)) return;
+                              setApplyingBulkSale(true);
+                              try {
+                                await Promise.all(
+                                  filteredProducts.map((item) =>
+                                    updateProduct(item.id, {
+                                      salePrice: Math.max(1, Math.round(item.price * (1 - pct / 100))),
+                                    })
+                                  )
+                                );
+                                setProductSavedSuccess(`${pct}% Sale applied to ${filteredProducts.length} product(s)!`);
+                              } finally {
+                                setApplyingBulkSale(false);
+                              }
+                            }}
+                            className="px-2 py-1 rounded bg-[#D6B16D] text-black text-[11px] font-bold hover:bg-[#F4E0A5] cursor-pointer disabled:opacity-40"
+                          >
+                            {applyingBulkSale ? '...' : 'Apply'}
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          disabled={applyingBulkSale}
+                          onClick={async () => {
+                            setApplyingBulkSale(true);
+                            try {
+                              await Promise.all(
+                                filteredProducts.map((item) =>
+                                  updateProduct(item.id, { salePrice: undefined })
+                                )
+                              );
+                              setProductSavedSuccess(`Sale removed from ${filteredProducts.length} product(s).`);
+                            } finally {
+                              setApplyingBulkSale(false);
+                            }
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#16120b] border border-red-900/50 hover:border-red-500 text-[11px] text-red-300 cursor-pointer transition-colors disabled:opacity-50"
+                        >
+                          Clear Sale
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {filteredProducts.length === 0 ? (
                     <div className="p-10 rounded-xl bg-[#0f0c08] border border-[#261f13] text-center space-y-3">
                       <Package className="w-7 h-7 text-neutral-600 mx-auto" />
@@ -1712,9 +1819,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                               </p>
                               <div className="flex items-center justify-between gap-2 pt-1">
                                 <div className="flex items-center gap-2.5">
-                                  <span className="font-mono tabular-nums font-bold text-[#D6B16D] text-xs">
-                                    {formatPKR(p.salePrice ?? p.price)}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-mono tabular-nums font-bold text-[#D6B16D] text-xs">
+                                      {formatPKR(p.salePrice && p.salePrice < p.price ? p.salePrice : p.price)}
+                                    </span>
+                                    {p.salePrice && p.salePrice < p.price && (
+                                      <>
+                                        <span className="font-mono tabular-nums text-[10px] text-neutral-500 line-through">
+                                          {formatPKR(p.price)}
+                                        </span>
+                                        <span className="text-[10px] font-mono font-semibold text-emerald-400">
+                                          -{Math.round(((p.price - p.salePrice) / p.price) * 100)}%
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
                                   <span
                                     className={`font-mono tabular-nums text-[10px] font-semibold ${
                                       p.stock <= 0 ? 'text-red-400' : p.stock <= 2 ? 'text-amber-300' : 'text-emerald-400'
@@ -1782,8 +1901,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                                   <td className="py-2.5 px-4 text-neutral-400 truncate max-w-[200px]">
                                     {p.material || p.goldPurity || 'Handcrafted'}
                                   </td>
-                                  <td className="py-2.5 px-4 text-right font-mono tabular-nums font-semibold text-[#D6B16D]">
-                                    {formatPKR(p.price)}
+                                  <td className="py-2.5 px-4 text-right font-mono tabular-nums font-semibold">
+                                    {p.salePrice && p.salePrice < p.price ? (
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-[#D6B16D]">{formatPKR(p.salePrice)}</span>
+                                        <span className="text-[10px] text-neutral-500">
+                                          <span className="line-through mr-1">{formatPKR(p.price)}</span>
+                                          <span className="text-emerald-400 font-semibold">
+                                            -{Math.round(((p.price - p.salePrice) / p.price) * 100)}%
+                                          </span>
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[#D6B16D]">{formatPKR(p.price)}</span>
+                                    )}
                                   </td>
                                   <td className="py-2.5 px-4 text-right">
                                     <span
@@ -1889,7 +2020,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     </div>
 
                     <div>
-                      <label className="block text-[11px] uppercase tracking-wider text-neutral-300 mb-1">Price *</label>
+                      <label className="block text-[11px] uppercase tracking-wider text-neutral-300 mb-1">Price (PKR) *</label>
                       <input
                         type="number"
                         value={prodPrice}
@@ -1899,15 +2030,77 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] uppercase tracking-wider text-neutral-300 mb-1">Sale Price (Optional)</label>
-                      <input
-                        type="number"
-                        value={prodSalePrice || ''}
-                        onChange={(e) => setProdSalePrice(e.target.value ? Number(e.target.value) : undefined)}
-                        placeholder="Leave empty if no discount"
-                        className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
-                      />
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="block text-[11px] uppercase tracking-wider text-neutral-300">
+                          Sale Price / % Off
+                        </label>
+                        {prodSalePrice && prodPrice > 0 && prodSalePrice < prodPrice && (
+                          <span className="text-[10px] font-mono text-emerald-400 font-semibold">
+                            {Math.round(((prodPrice - prodSalePrice) / prodPrice) * 100)}% OFF
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min={0}
+                            max={90}
+                            value={
+                              prodSalePrice && prodPrice > 0 && prodSalePrice < prodPrice
+                                ? Math.round(((prodPrice - prodSalePrice) / prodPrice) * 100)
+                                : ''
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (!val) {
+                                setProdSalePrice(undefined);
+                                return;
+                              }
+                              const pct = Math.max(0, Math.min(90, Number(val)));
+                              if (pct === 0 || Number.isNaN(pct)) {
+                                setProdSalePrice(undefined);
+                              } else {
+                                setProdSalePrice(Math.max(1, Math.round(prodPrice * (1 - pct / 100))));
+                              }
+                            }}
+                            placeholder="Sale %"
+                            className="w-full bg-[#15110a] border border-[#3b2e1b] rounded pl-3 pr-7 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                          />
+                          <span className="absolute right-2.5 top-2 text-xs text-[#D6B16D] font-mono">%</span>
+                        </div>
+                        <input
+                          type="number"
+                          value={prodSalePrice || ''}
+                          onChange={(e) => setProdSalePrice(e.target.value ? Number(e.target.value) : undefined)}
+                          placeholder="Sale PKR"
+                          className="w-full bg-[#15110a] border border-[#3b2e1b] rounded px-3 py-2 text-white focus:outline-none focus:border-[#D6B16D]"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        {[10, 15, 20, 25, 30].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() =>
+                              setProdSalePrice(Math.max(1, Math.round(prodPrice * (1 - pct / 100))))
+                            }
+                            className="px-2 py-0.5 rounded bg-[#18130a] border border-[#332718] hover:border-[#D6B16D] text-[10px] font-mono text-[#D6B16D] cursor-pointer"
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                        {prodSalePrice !== undefined && (
+                          <button
+                            type="button"
+                            onClick={() => setProdSalePrice(undefined)}
+                            className="px-2 py-0.5 rounded bg-[#18130a] border border-red-900/50 text-[10px] text-red-300 hover:border-red-500 cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div>

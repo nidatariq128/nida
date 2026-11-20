@@ -237,7 +237,7 @@ function MainApp() {
             />
 
             <div id="brand-story">
-              <BrandStory />
+              <BrandStory onSelectCategory={(cat) => handleNavigateShop(cat)} />
             </div>
 
             <PromotionalBanner
@@ -313,6 +313,7 @@ function MainApp() {
       {/* 3. Luxury 4-Column Footer */}
       <Footer
         onNavigateView={handleNavigateView}
+        onNavigateShop={handleNavigateShop}
         onOpenAdmin={() => setIsAdminOpen(true)}
       />
 

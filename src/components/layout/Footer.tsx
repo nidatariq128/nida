@@ -9,16 +9,13 @@ import {
   Phone,
   Mail,
   MapPin,
-  ExternalLink,
-  HeartHandshake,
-  ShoppingBag,
-  Gem,
-  Award
+  ExternalLink
 } from 'lucide-react';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import { ProductCategory } from '../../types';
 
 // Custom TikTok & Instagram Icons
 const InstagramIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
@@ -43,11 +40,13 @@ const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" 
 
 interface FooterProps {
   onNavigateView: (view: string) => void;
+  onNavigateShop?: (category?: ProductCategory | 'all' | 'new') => void;
   onOpenAdmin: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onNavigateView,
+  onNavigateShop,
   onOpenAdmin
 }) => {
   const { settings } = useStoreSettings();
@@ -76,160 +75,146 @@ export const Footer: React.FC<FooterProps> = ({
     }
   };
 
+  const quickCollections: { label: string; category: ProductCategory | 'all' | 'new' }[] = [
+    { label: 'New Arrivals', category: 'new' },
+    { label: 'Jewellery Sets', category: 'Jewellery Sets' },
+    { label: 'Bridal Bangles & Kadas', category: 'Bangles' },
+    { label: 'Luxury Watches', category: 'Watches' },
+    { label: 'Waterproof 316L Steel', category: 'Stainless Steel Jewellery' },
+    { label: 'Designer Handbags', category: 'Handbags' },
+    { label: 'Rings & Earrings', category: 'Rings' },
+  ];
+
   return (
     <footer className="bg-[#050505] text-neutral-300 border-t border-[#1e1911]">
       
-      {/* 1. Value Badges & Category Highlights */}
-      <div className="border-b border-[#1c1710] py-10 px-6 lg:px-12">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="flex items-start gap-4 p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <Sparkles className="w-7 h-7 text-[#D6B16D] shrink-0 mt-0.5" />
+      {/* 1. Compact Store Guarantees */}
+      <div className="border-b border-[#1c1710] py-7 sm:py-9 px-4 sm:px-6 lg:px-12">
+        <div className="max-w-7xl mx-auto grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+          <div className="flex items-start gap-3 p-3.5 sm:p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <Truck className="w-5 h-5 sm:w-6 sm:h-6 text-[#D6B16D] shrink-0 mt-0.5" />
             <div>
-              <h4 className="text-sm font-serif font-semibold text-white tracking-wider">Precision Watches</h4>
-              <p className="text-xs text-neutral-400 mt-1">Curated chronometers, sapphire crystal coating & stainless steel bracelets.</p>
+              <h4 className="text-xs sm:text-sm font-serif font-semibold text-white">
+                Free Delivery ₨ {settings.freeShippingThreshold.toLocaleString()}+
+              </h4>
+              <p className="text-[11px] sm:text-xs text-neutral-400 mt-0.5">
+                Cash on Delivery across Pakistan.
+              </p>
             </div>
           </div>
-          <div className="flex items-start gap-4 p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <Truck className="w-7 h-7 text-[#D6B16D] shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-serif font-semibold text-white tracking-wider">Free Delivery over ₨ {settings.freeShippingThreshold.toLocaleString()}</h4>
-              <p className="text-xs text-neutral-400 mt-1">Cash on Delivery across Karachi & all Pakistan cities via TCS & Leopards.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-4 p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <Clock className="w-7 h-7 text-[#D6B16D] shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-serif font-semibold text-white tracking-wider">Bridal Bangles & Kadas</h4>
-              <p className="text-xs text-neutral-400 mt-1">Traditional velvet choodiyan, stone studded kadas & bridal accessories.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-4 p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <ShieldCheck className="w-7 h-7 text-[#D6B16D] shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-serif font-semibold text-white tracking-wider">Anti-Tarnish 316L Steel</h4>
-              <p className="text-xs text-neutral-400 mt-1">100% waterproof everyday jewellery & structured designer handbags.</p>
-            </div>
-          </div>
-        </div>
 
-        {/* Curated Categories Strip with Value Badges */}
-        <div className="max-w-7xl mx-auto mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <Sparkles className="w-4 h-4 text-[#D6B16D] shrink-0" />
-            <span className="text-xs font-serif font-semibold text-white leading-tight">Luxury Watches</span>
+          <div className="flex items-start gap-3 p-3.5 sm:p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-[#D6B16D] shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs sm:text-sm font-serif font-semibold text-white">
+                Anti-Tarnish 316L Steel
+              </h4>
+              <p className="text-[11px] sm:text-xs text-neutral-400 mt-0.5">
+                100% waterproof daily-wear finishes.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <ShieldCheck className="w-4 h-4 text-[#D6B16D] shrink-0" />
-            <span className="text-xs font-serif font-semibold text-white leading-tight">Watches & Bangles</span>
+
+          <div className="flex items-start gap-3 p-3.5 sm:p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-[#D6B16D] shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs sm:text-sm font-serif font-semibold text-white">
+                Custom Gift Packaging
+              </h4>
+              <p className="text-[11px] sm:text-xs text-neutral-400 mt-0.5">
+                Velvet boxes, bridal hampers &amp; notes.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <HeartHandshake className="w-4 h-4 text-[#D6B16D] shrink-0" />
-            <span className="text-xs font-serif font-semibold text-white leading-tight">Waterproof Steel</span>
-          </div>
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <ShoppingBag className="w-4 h-4 text-[#D6B16D] shrink-0" />
-            <span className="text-xs font-serif font-semibold text-white leading-tight">Handbags</span>
-          </div>
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <Gem className="w-4 h-4 text-[#D6B16D] shrink-0" />
-            <span className="text-xs font-serif font-semibold text-white leading-tight">Jewellery</span>
-          </div>
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
-            <Award className="w-4 h-4 text-[#D6B16D] shrink-0" />
-            <span className="text-xs font-serif font-semibold text-white leading-tight">Stainless Steel Jewellery</span>
+
+          <div className="flex items-start gap-3 p-3.5 sm:p-4 rounded-xl bg-[#0a0a0a] border border-[#231d13]">
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-[#D6B16D] shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs sm:text-sm font-serif font-semibold text-white">
+                7-Day Easy Exchange
+              </h4>
+              <p className="text-[11px] sm:text-xs text-neutral-400 mt-0.5">
+                Dedicated WhatsApp concierge support.
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 2. Exactly 4 Columns as requested */}
-      <div className="py-16 px-6 lg:px-12 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+      {/* 2. 4 Functional Navigation Columns */}
+      <div className="py-12 sm:py-16 px-6 lg:px-12 max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-10">
         
-        {/* Column 1: Customer Support */}
+        {/* Column 1: Shop Collections (Clickable!) */}
+        <div className="space-y-4">
+          <h4 className="text-xs uppercase tracking-[0.2em] text-[#D6B16D] font-bold">
+            Shop Collections
+          </h4>
+          <ul className="space-y-2.5 text-xs text-neutral-400">
+            {quickCollections.map((item) => (
+              <li key={item.label}>
+                <button
+                  onClick={() => onNavigateShop ? onNavigateShop(item.category) : onNavigateView('shop')}
+                  className="hover:text-[#D6B16D] transition-colors text-left"
+                >
+                  {item.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Column 2: Customer Support */}
         <div className="space-y-4">
           <h4 className="text-xs uppercase tracking-[0.2em] text-[#D6B16D] font-bold">
             Customer Support
           </h4>
           <ul className="space-y-2.5 text-xs text-neutral-400">
             <li>
-              <button onClick={() => onNavigateView('contact')} className="hover:text-[#D6B16D] transition-colors text-left flex items-center gap-1.5">
-                Contact Us & Store Help
+              <button onClick={() => onNavigateView('tracking')} className="hover:text-[#D6B16D] transition-colors text-left">
+                Track Your Order
+              </button>
+            </li>
+            <li>
+              <button onClick={() => onNavigateView('contact')} className="hover:text-[#D6B16D] transition-colors text-left">
+                Contact Us &amp; Store Help
               </button>
             </li>
             <li>
               <button onClick={() => onNavigateView('faqs')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Frequently Asked Questions (FAQ)
-              </button>
-            </li>
-            <li>
-              <button onClick={() => onNavigateView('tracking')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Track Your Consignment
+                Frequently Asked Questions
               </button>
             </li>
             <li>
               <button onClick={() => onNavigateView('product-care')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Product Care & Maintenance Guide
+                Product Care Guide
+              </button>
+            </li>
+            <li>
+              <button onClick={() => onNavigateView('shipping-delivery')} className="hover:text-[#D6B16D] transition-colors text-left">
+                Shipping &amp; Delivery Policy
               </button>
             </li>
             <li>
               <button onClick={() => onNavigateView('returns-refunds')} className="hover:text-[#D6B16D] transition-colors text-left">
-                7-Day Easy Returns & Exchange
+                Returns, Refunds &amp; Exchange
+              </button>
+            </li>
+            <li>
+              <button onClick={() => onNavigateView('warranty-policy')} className="hover:text-[#D6B16D] transition-colors text-left">
+                Warranty Policy
               </button>
             </li>
             {user && isAdmin && (
               <li className="pt-2">
                 <button 
                   onClick={onOpenAdmin} 
-                  className="text-[#D6B16D]/70 hover:text-[#D6B16D] transition-colors text-left flex items-center gap-1.5 text-[11px] font-mono"
+                  className="text-[#D6B16D]/80 hover:text-[#D6B16D] transition-colors text-left flex items-center gap-1.5 text-[11px] font-mono"
                 >
                   <Sparkles className="w-3 h-3 text-[#D6B16D]" />
-                  <span>Admin CMS & Store Settings</span>
+                  <span>Admin Dashboard</span>
                 </button>
               </li>
             )}
-          </ul>
-        </div>
-
-        {/* Column 2: Policies & Information */}
-        <div className="space-y-4">
-          <h4 className="text-xs uppercase tracking-[0.2em] text-[#D6B16D] font-bold">
-            Policies & Information
-          </h4>
-          <ul className="space-y-2.5 text-xs text-neutral-400">
-            <li>
-              <button onClick={() => onNavigateView('about')} className="hover:text-[#D6B16D] transition-colors text-left">
-                About ZN Jewelers
-              </button>
-            </li>
-            <li>
-              <button onClick={() => onNavigateView('product-quality')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Product Quality & Authenticity
-              </button>
-            </li>
-            <li>
-              <button onClick={() => onNavigateView('shipping-delivery')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Shipping & Delivery Policy
-              </button>
-            </li>
-            <li>
-              <button onClick={() => onNavigateView('returns-refunds')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Return, Refund & Exchange Policy
-              </button>
-            </li>
-            <li>
-              <button onClick={() => onNavigateView('warranty-policy')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Jewellery & Accessories Warranty
-              </button>
-            </li>
-            <li>
-              <button onClick={() => onNavigateView('privacy-policy')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Privacy Policy
-              </button>
-            </li>
-            <li>
-              <button onClick={() => onNavigateView('terms-conditions')} className="hover:text-[#D6B16D] transition-colors text-left">
-                Terms & Conditions
-              </button>
-            </li>
           </ul>
         </div>
 
@@ -256,14 +241,14 @@ export const Footer: React.FC<FooterProps> = ({
 
             <div className="flex items-center gap-2.5">
               <Mail className="w-4 h-4 text-[#D6B16D] shrink-0" />
-              <a href={`mailto:${settings.email}`} className="text-neutral-300 hover:text-[#D6B16D] transition-colors">
+              <a href={`mailto:${settings.email}`} className="text-neutral-300 hover:text-[#D6B16D] transition-colors break-all">
                 {settings.email}
               </a>
             </div>
 
-            <div className="pt-2">
-              <span className="text-[11px] text-neutral-500 block mb-2 font-mono">
-                Store Hours: Monday – Saturday (12:00 PM – 10:00 PM PKT)
+            <div className="pt-1">
+              <span className="text-[11px] text-neutral-500 block mb-2">
+                Mon – Sat • 12:00 PM – 10:00 PM PKT
               </span>
               <a
                 href={settings.googleMapsSearchUrl}
@@ -271,90 +256,62 @@ export const Footer: React.FC<FooterProps> = ({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-xs text-[#D6B16D] hover:underline font-medium"
               >
-                <span>View on Google Maps</span>
+                <span>Directions on Google Maps</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
           </div>
         </div>
 
-        {/* Column 4: Follow Us & Social Media */}
+        {/* Column 4: Connect & VIP Newsletter (Slim & Clean — No Duplicate Social Cards) */}
         <div className="space-y-4">
           <h4 className="text-xs uppercase tracking-[0.2em] text-[#D6B16D] font-bold">
-            Follow Us
+            Connect &amp; VIP Updates
           </h4>
           <p className="text-xs text-neutral-400 leading-relaxed">
-            Stay connected for exclusive new fashion accessory releases, bridal styling inspiration, and limited-time offers.
+            Get alerts on new bridal sets, waterproof steel drops, and festive offers.
           </p>
 
-          <div className="flex flex-col gap-2.5 pt-1">
+          {/* Compact Social Icon Links */}
+          <div className="flex items-center gap-2.5">
             <a
               href={settings.instagramUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-[#0f0f0f] border border-[#222] hover:border-[#fd1d1d]/60 hover:bg-[#161214] transition-all group"
+              aria-label="Instagram"
+              title="Follow on Instagram"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0f0f0f] border border-[#252018] hover:border-[#D6B16D] text-xs text-neutral-200 hover:text-[#D6B16D] transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#fd1d1d]/20 to-[#833ab4]/20 border border-[#fd1d1d]/30 flex items-center justify-center text-[#fd1d1d] group-hover:scale-105 transition-transform">
-                  <InstagramIcon className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-white block">Instagram</span>
-                  <span className="text-[11px] text-neutral-500 font-mono">
-                    {(() => {
-                      const clean = settings.instagramUrl.split('?')[0].replace(/\/+$/, '').split('/').pop() || 'chipmunk.8083543';
-                      return clean.startsWith('@') ? clean : `@${clean}`;
-                    })()}
-                  </span>
-                </div>
-              </div>
-              <ExternalLink className="w-3.5 h-3.5 text-neutral-500 group-hover:text-white transition-colors" />
+              <InstagramIcon className="w-3.5 h-3.5 text-[#fd1d1d]" />
+              <span>Instagram</span>
             </a>
 
             <a
               href={settings.tiktokUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-[#0f0f0f] border border-[#222] hover:border-[#00f2fe]/60 hover:bg-[#0c1417] transition-all group"
+              aria-label="TikTok"
+              title="Watch on TikTok"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0f0f0f] border border-[#252018] hover:border-[#D6B16D] text-xs text-neutral-200 hover:text-[#D6B16D] transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#00f2fe]/10 border border-[#00f2fe]/30 flex items-center justify-center text-[#00f2fe] group-hover:scale-105 transition-transform">
-                  <TikTokIcon className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-white block">TikTok</span>
-                  <span className="text-[11px] text-neutral-500 font-mono">
-                    {(() => {
-                      const clean = settings.tiktokUrl.split('?')[0].replace(/\/+$/, '').split('/').pop() || '@zeeshan.king4803';
-                      return clean.startsWith('@') ? clean : `@${clean}`;
-                    })()}
-                  </span>
-                </div>
-              </div>
-              <ExternalLink className="w-3.5 h-3.5 text-neutral-500 group-hover:text-white transition-colors" />
+              <TikTokIcon className="w-3.5 h-3.5 text-[#00f2fe]" />
+              <span>TikTok</span>
             </a>
 
             <a
               href={settings.whatsappCommunityUrl || settings.whatsappUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between p-2.5 rounded-xl bg-[#0f0f0f] border border-[#222] hover:border-[#25D366]/60 hover:bg-[#0d1611] transition-all group"
+              aria-label="WhatsApp"
+              title="Chat on WhatsApp"
+              className="flex items-center justify-center p-2 rounded-lg bg-[#0f0f0f] border border-[#252018] hover:border-emerald-500 text-emerald-400 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#25D366]/10 border border-[#25D366]/30 flex items-center justify-center text-[#25D366] group-hover:scale-105 transition-transform">
-                  <WhatsAppIcon className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-white block">WhatsApp Community</span>
-                  <span className="text-[11px] text-neutral-500 font-mono">Official VIP Updates</span>
-                </div>
-              </div>
-              <ExternalLink className="w-3.5 h-3.5 text-neutral-500 group-hover:text-white transition-colors" />
+              <WhatsAppIcon className="w-4 h-4" />
             </a>
           </div>
 
-          {/* Quick Newsletter in Col 4 */}
-          <div className="pt-3">
+          {/* VIP Newsletter */}
+          <div className="pt-1">
             {subscribed ? (
               <div className="flex items-center gap-2 text-xs text-[#D6B16D] bg-[#1a160f] p-2.5 rounded-lg border border-[#3b311e]">
                 <CheckCircle className="w-3.5 h-3.5 text-[#D6B16D]" />
@@ -366,13 +323,14 @@ export const Footer: React.FC<FooterProps> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="VIP Newsletter..."
+                  placeholder="Enter email for VIP drops..."
                   required
                   className="bg-[#12100c] border border-[#3b311e] text-neutral-200 text-xs px-3 py-2 rounded focus:outline-none focus:border-[#D6B16D] w-full placeholder:text-neutral-600"
                 />
                 <button
                   type="submit"
                   disabled={submitting}
+                  aria-label="Subscribe"
                   className="px-3 py-2 bg-[#D6B16D] text-black text-xs font-bold rounded hover:bg-[#F4E0A5] transition-colors shrink-0"
                 >
                   <Send className="w-3 h-3" />
@@ -380,6 +338,13 @@ export const Footer: React.FC<FooterProps> = ({
               </form>
             )}
           </div>
+
+          <button
+            onClick={() => onNavigateView('about')}
+            className="text-xs text-neutral-400 hover:text-[#D6B16D] transition-colors inline-block pt-1"
+          >
+            Read About ZN Jewelers →
+          </button>
         </div>
 
       </div>
@@ -394,11 +359,11 @@ export const Footer: React.FC<FooterProps> = ({
             </button>
             <span>•</span>
             <button onClick={() => onNavigateView('terms-conditions')} className="hover:text-neutral-300 transition-colors">
-              Terms & Conditions
+              Terms &amp; Conditions
             </button>
             <span>•</span>
             <button onClick={() => onNavigateView('product-quality')} className="hover:text-neutral-300 transition-colors">
-              Quality & Authenticity
+              Quality &amp; Authenticity
             </button>
             <span>•</span>
             <button onClick={() => onNavigateView('shipping-delivery')} className="hover:text-neutral-300 transition-colors">

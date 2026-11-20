@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink, Heart, MessageCircle } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useStoreSettings } from '../../context/StoreSettingsContext';
 
 const InstagramIcon: React.FC<{ className?: string }> = ({ className = "w-4 h-4" }) => (
@@ -26,39 +26,31 @@ interface SocialPost {
   id: string;
   type: 'instagram' | 'tiktok' | 'whatsapp';
   image: string;
-  tag: string;
   caption: string;
-  likes: string;
-  comments: string;
+  actionLabel: string;
 }
 
 const SOCIAL_POSTS: SocialPost[] = [
   {
     id: 'sp-1',
     type: 'instagram',
-    image: '/hero-watches.jpg',
-    tag: '#ChronographVibe',
-    caption: 'Precision horlogerie, waterproof jewellery & structured handbags curated daily on Instagram.',
-    likes: '1.4k',
-    comments: '88'
+    image: '/hero-earrings.jpg',
+    caption: 'Daily styling reels, bridal earrings, waterproof pieces & close-ups on our official Instagram.',
+    actionLabel: 'Follow on Instagram'
   },
   {
     id: 'sp-2',
     type: 'tiktok',
-    image: '/hero-bangles.jpg',
-    tag: '#BridalAccessories',
-    caption: 'Unboxings, bridal bangle styling & live timepiece showcases on our official TikTok.',
-    likes: '4.8k',
-    comments: '215'
+    image: '/hero-rings.jpg',
+    caption: 'Live unboxings, gift hamper packing, custom orders & restock clips on our official TikTok.',
+    actionLabel: 'Watch on TikTok'
   },
   {
     id: 'sp-3',
     type: 'whatsapp',
-    image: '/hero-handbags.jpg',
-    tag: '#VIPCommunity',
-    caption: 'Join our WhatsApp Community for fresh arrivals, exclusive restock alerts & direct concierge support.',
-    likes: '2.9k',
-    comments: '164'
+    image: '/hero-collection-enhanced.jpg',
+    caption: 'Direct WhatsApp Concierge for fresh arrivals, custom sizing & instant order booking.',
+    actionLabel: 'Join WhatsApp'
   }
 ];
 
@@ -72,52 +64,58 @@ export const SocialShowcase: React.FC = () => {
     return whatsappCommunityLink;
   };
 
-  const getPostHandle = (type: SocialPost['type']) => {
+  const getChannelLabel = (type: SocialPost['type']) => {
     if (type === 'whatsapp') return 'ZN VIP Community';
     const rawUrl = type === 'instagram' ? settings.instagramUrl : settings.tiktokUrl;
-    const fallback = type === 'instagram' ? 'chipmunk.8083543' : '@zeeshan.king4803';
-    const clean = rawUrl?.split('?')[0].replace(/\/+$/, '').split('/').pop() || fallback;
-    return clean.startsWith('@') ? clean : `@${clean}`;
+    const clean = rawUrl?.split('?')[0].replace(/\/+$/, '').split('/').pop() || '';
+    if (clean.toLowerCase().includes('zn')) {
+      return clean.startsWith('@') ? clean : `@${clean}`;
+    }
+    return type === 'instagram' ? 'ZN Jewelers Official' : 'ZN Jewelers Official';
   };
 
   return (
-    <section className="py-20 bg-[#0a0a0a] border-t border-[#1a1a1a] relative overflow-hidden">
+    <section className="py-14 sm:py-20 bg-[#0a0a0a] border-t border-[#1a1a1a] relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 sm:mb-12 gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#D6B16D]/30 bg-[#D6B16D]/10 text-[#D6B16D] text-xs font-semibold tracking-wider uppercase mb-3">
+            <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.28em] text-[#D6B16D] font-medium mb-2">
               <InstagramIcon className="w-3.5 h-3.5" />
-              Community & Style
+              <span>Community &amp; Style</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-serif font-bold text-white tracking-tight">
               Follow Us on Social Media
             </h2>
             <p className="hidden md:block text-neutral-400 text-sm mt-2 max-w-xl">
-              Follow us on Instagram & TikTok or join our official WhatsApp Community for fresh arrivals and VIP updates.
+              Follow ZN Jewelers on Instagram &amp; TikTok or message our WhatsApp Concierge for daily styling videos and fresh drops.
             </p>
           </div>
         </div>
 
-        {/* Strictly 3-Channel Grid: Instagram, TikTok, WhatsApp Community */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {/* 3-Channel Grid: Instagram, TikTok, WhatsApp Community */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
           {SOCIAL_POSTS.map((post) => (
-            <div
+            <a
               key={post.id}
-              className="group relative rounded-2xl overflow-hidden bg-[#141414] border border-[#222] hover:border-[#D6B16D]/50 transition-all duration-300 flex flex-col"
+              href={getPostHref(post.type)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group relative rounded-2xl overflow-hidden bg-[#141414] border border-[#222] hover:border-[#D6B16D]/60 transition-all duration-300 flex flex-col cursor-pointer"
             >
               {/* Media Container */}
-              <div className="relative aspect-square w-full overflow-hidden bg-black">
+              <div className="relative aspect-[4/3] sm:aspect-square w-full overflow-hidden bg-black">
                 <img
                   src={post.image}
                   alt={post.caption}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-90 transition-opacity" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent opacity-75 group-hover:opacity-90 transition-opacity" />
 
-                {/* Badge Top Left */}
-                <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white text-[11px] font-medium">
+                {/* Channel Label Top Left */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/75 backdrop-blur-md border border-white/10 text-white text-[11px] font-medium">
                   {post.type === 'instagram' ? (
                     <>
                       <InstagramIcon className="w-3 h-3 text-[#fd1d1d]" />
@@ -131,61 +129,46 @@ export const SocialShowcase: React.FC = () => {
                   ) : (
                     <>
                       <WhatsAppIcon className="w-3 h-3 text-[#25D366]" />
-                      <span>WhatsApp Community</span>
+                      <span>WhatsApp</span>
                     </>
                   )}
                 </div>
 
-                {/* Tag Top Right */}
-                <span className="absolute top-3 right-3 text-[10px] font-mono px-2 py-0.5 rounded bg-[#D6B16D]/20 text-[#D6B16D] border border-[#D6B16D]/40 backdrop-blur-sm">
-                  {post.tag}
-                </span>
-
-                {/* Hover Interaction Overlay */}
+                {/* Hover Action Label */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                  <div className="flex items-center gap-4 text-white text-xs font-semibold bg-black/70 backdrop-blur-md px-4 py-2 rounded-full border border-white/20">
-                    <span className="flex items-center gap-1">
-                      <Heart className="w-3.5 h-3.5 fill-red-500 text-red-500" />
-                      {post.likes}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MessageCircle className="w-3.5 h-3.5 text-[#D6B16D]" />
-                      {post.comments}
-                    </span>
-                  </div>
+                  <span className="flex items-center gap-2 text-white text-xs font-semibold uppercase tracking-wider bg-black/80 backdrop-blur-md px-4 py-2 rounded-lg border border-[#D6B16D]/50">
+                    <span>{post.actionLabel}</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-[#D6B16D]" />
+                  </span>
                 </div>
               </div>
 
               {/* Caption & Profile Link */}
-              <div className="p-4 flex-1 flex flex-col justify-between">
-                <p className="hidden md:block text-xs text-neutral-300 line-clamp-2 leading-relaxed">
+              <div className="p-4 flex-1 flex flex-col justify-between gap-3">
+                <p className="text-xs text-neutral-300 line-clamp-2 leading-relaxed">
                   {post.caption}
                 </p>
-                <div className="md:mt-3 md:pt-3 md:border-t md:border-[#1f1f1f] flex items-center justify-between text-[11px]">
-                  <span className="text-neutral-500 font-mono">
-                    {getPostHandle(post.type)}
+                <div className="pt-2.5 border-t border-[#1f1f1f] flex items-center justify-between text-[11px]">
+                  <span className="text-neutral-400">
+                    {getChannelLabel(post.type)}
                   </span>
-                  <a
-                    href={getPostHref(post.type)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#D6B16D] hover:underline flex items-center gap-1 font-medium"
-                  >
-                    {post.type === 'whatsapp' ? 'Join Community' : 'View Profile'} <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <span className="text-[#D6B16D] group-hover:underline flex items-center gap-1 font-medium whitespace-nowrap">
+                    {post.type === 'whatsapp' ? 'Join Now' : 'View Profile'} <ExternalLink className="w-3 h-3" />
+                  </span>
                 </div>
               </div>
-            </div>
+            </a>
           ))}
         </div>
 
         {/* Store Walk-in Notice */}
-        <div className="mt-12 text-center text-xs text-neutral-500">
-          Capture your in-store experience at <strong className="text-neutral-300">{settings.storeAddress}</strong> and tag us to win monthly fashion accessory vouchers.
+        <div className="mt-8 sm:mt-10 text-center text-xs text-neutral-500">
+          Visit our Karachi flagship at <strong className="text-neutral-300">{settings.storeAddress}</strong>
         </div>
 
       </div>
     </section>
   );
 };
+
 

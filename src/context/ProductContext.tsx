@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, setDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { useAuth } from './AuthContext';
 import { Product, CollectionItem } from '../types';
@@ -441,11 +441,17 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateProduct = async (id: string, updates: Partial<Product>) => {
     const existingProduct = products.find((p) => p.id === id);
     const mergedProduct = existingProduct ? { ...existingProduct, ...updates } : ({ id, ...updates } as Product);
+    if ('salePrice' in updates && updates.salePrice === undefined) {
+      delete mergedProduct.salePrice;
+    }
     const cleanUpdates: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(mergedProduct)) {
       if (v !== undefined) {
         cleanUpdates[k] = v;
       }
+    }
+    if ('salePrice' in updates && updates.salePrice === undefined) {
+      cleanUpdates.salePrice = deleteField();
     }
 
     try {

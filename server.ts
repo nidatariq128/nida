@@ -2694,7 +2694,7 @@ app.post('/api/admin/products', async (req: Request, res: Response) => {
     ledger.deletedProductIds = (ledger.deletedProductIds || []).filter((id) => id !== product.id);
     delete ledger.pendingFirestoreSync[product.id];
     if (adminDb) {
-      await adminDb.collection('products').doc(product.id).set(product, { merge: true });
+      await adminDb.collection('products').doc(product.id).set(product);
     }
     saveLedger(ledger);
   });

@@ -11,6 +11,7 @@ export const DEFAULT_GIFT_PACKAGING_OPTIONS: GiftPackagingOption[] = [
     name: 'Standard Signature Pouch',
     description: 'Protective ZN velvet pouch & tamper-evident parcel',
     price: 0,
+    image: '/gift-pouch.svg',
     active: true,
   },
   {
@@ -18,6 +19,7 @@ export const DEFAULT_GIFT_PACKAGING_OPTIONS: GiftPackagingOption[] = [
     name: 'Royal Velvet Gift Box + Ribbon',
     description: 'Cushioned presentation box with satin ribbon & tag',
     price: 250,
+    image: '/gift-box.svg',
     active: true,
   },
   {
@@ -25,9 +27,27 @@ export const DEFAULT_GIFT_PACKAGING_OPTIONS: GiftPackagingOption[] = [
     name: 'Luxury Bridal Gift Hamper',
     description: 'Keepsake box, silk tissue, gold ribbon & greeting card',
     price: 500,
+    image: '/gift-hamper.svg',
     active: true,
   },
 ];
+
+const DEFAULT_GIFT_BOX_IMAGES: Record<string, string> = {
+  'pkg-standard': '/gift-pouch.svg',
+  'pkg-velvet-box': '/gift-box.svg',
+  'pkg-bridal-hamper': '/gift-hamper.svg',
+};
+
+function enrichGiftPackagingImages(options?: GiftPackagingOption[]): GiftPackagingOption[] {
+  if (!Array.isArray(options) || options.length === 0) {
+    return DEFAULT_GIFT_PACKAGING_OPTIONS;
+  }
+  return options.map((opt) =>
+    !opt.image && DEFAULT_GIFT_BOX_IMAGES[opt.id]
+      ? { ...opt, image: DEFAULT_GIFT_BOX_IMAGES[opt.id] }
+      : opt
+  );
+}
 
 export interface StoreSettings {
   businessName: string;
@@ -145,6 +165,7 @@ export const StoreSettingsProvider: React.FC<{ children: React.ReactNode }> = ({
         ) {
           merged.announcementText = DEFAULT_STORE_SETTINGS.announcementText;
         }
+        merged.giftPackagingOptions = enrichGiftPackagingImages(merged.giftPackagingOptions);
         return merged;
       }
     } catch (e) {
@@ -189,9 +210,7 @@ export const StoreSettingsProvider: React.FC<{ children: React.ReactNode }> = ({
             ) {
               merged.announcementText = DEFAULT_STORE_SETTINGS.announcementText;
             }
-            if (!Array.isArray(merged.giftPackagingOptions)) {
-              merged.giftPackagingOptions = DEFAULT_GIFT_PACKAGING_OPTIONS;
-            }
+            merged.giftPackagingOptions = enrichGiftPackagingImages(merged.giftPackagingOptions);
             localStorage.setItem('zn_store_settings', JSON.stringify(merged));
             return merged;
           });

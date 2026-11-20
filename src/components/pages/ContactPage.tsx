@@ -319,7 +319,12 @@ export const ContactPage: React.FC = () => {
                       <span className="text-xs font-semibold text-white group-hover:text-[#D6B16D] transition-colors block">
                         Instagram
                       </span>
-                      <span className="text-[11px] text-neutral-400">@chipmunk.8083543</span>
+                      <span className="text-[11px] text-neutral-400">
+                        {(() => {
+                          const clean = settings.instagramUrl?.split('?')[0].replace(/\/+$/, '').split('/').pop() || '';
+                          return clean.toLowerCase().includes('zn') ? `@${clean}` : 'ZN Jewelers Official';
+                        })()}
+                      </span>
                     </div>
                   </div>
                   <span className="text-[11px] text-[#D6B16D] font-medium">Follow →</span>
@@ -340,7 +345,12 @@ export const ContactPage: React.FC = () => {
                       <span className="text-xs font-semibold text-white group-hover:text-[#D6B16D] transition-colors block">
                         TikTok
                       </span>
-                      <span className="text-[11px] text-neutral-400">@zeeshan.king4803</span>
+                      <span className="text-[11px] text-neutral-400">
+                        {(() => {
+                          const clean = settings.tiktokUrl?.split('?')[0].replace(/\/+$/, '').split('/').pop() || '';
+                          return clean.toLowerCase().includes('zn') ? (clean.startsWith('@') ? clean : `@${clean}`) : 'ZN Jewelers Official';
+                        })()}
+                      </span>
                     </div>
                   </div>
                   <span className="text-[11px] text-[#D6B16D] font-medium">Follow →</span>
